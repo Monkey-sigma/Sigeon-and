@@ -1,0 +1,6 @@
+{
+  "name": "SIGEON Calendar",
+  "description": "Умный календарь с расписанием колледжа по API, заметками и синхронизацией с Google Календарем",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

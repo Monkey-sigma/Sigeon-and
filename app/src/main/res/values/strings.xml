@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">SIGEON</string>
+    <string name="app_full_name">SIGEON Calendar</string>
+    <string name="widget_schedule_desc">Виджет текущей пары и расписания занятий колледжа</string>
+</resources>
