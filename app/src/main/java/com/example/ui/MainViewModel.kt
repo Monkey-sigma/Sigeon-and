@@ -8,10 +8,14 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.data.api.CollegeProfile
 import com.example.data.api.CollegeScheduleFetcher
+import com.example.data.api.PlanovoGroup
+import com.example.data.api.PlanovoGroupsCatalog
 import com.example.data.local.AppDatabase
+import com.example.data.local.ChecklistItem
 import com.example.data.local.EventEntity
 import com.example.data.local.NoteEntity
 import com.example.data.repository.CalendarRepository
+import com.example.data.sync.ConnectivityObserver
 import com.example.data.sync.DeviceCalendar
 import com.example.data.sync.GoogleCalendarSyncManager
 import com.example.widget.CollegeScheduleWidgetProvider
@@ -21,6 +25,7 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -46,8 +51,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     val fetcher = CollegeScheduleFetcher()
     private val syncManager = GoogleCalendarSyncManager(application)
     val repository = CalendarRepository(db.calendarDao(), fetcher, syncManager)
+    private val connectivityObserver = ConnectivityObserver(application)
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+
+    // Network connectivity
+    val isOnline: StateFlow<Boolean> = connectivityObserver.isOnline.stateIn(
+        viewModelScope,
+        SharingStarted.WhileSubscribed(5000),
+        connectivityObserver.isCurrentlyConnected()
+    )
 
     // Selected date
     private val _selectedDate = MutableStateFlow(dateFormat.format(Date()))
@@ -70,6 +83,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _statusMessage = MutableStateFlow<String?>(null)
     val statusMessage: StateFlow<String?> = _statusMessage.asStateFlow()
 
+    // Exported backup JSON state for offline sharing/exporting
+    private val _backupJsonExported = MutableStateFlow<String?>(null)
+    val backupJsonExported: StateFlow<String?> = _backupJsonExported.asStateFlow()
+
     // Available calendars & permissions
     private val _hasCalendarPermission = MutableStateFlow(syncManager.hasCalendarPermissions())
     val hasCalendarPermission: StateFlow<Boolean> = _hasCalendarPermission.asStateFlow()
@@ -83,6 +100,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // College profile config
     private val _selectedProfile = MutableStateFlow(fetcher.defaultProfiles.first())
     val selectedProfile: StateFlow<CollegeProfile> = _selectedProfile.asStateFlow()
+
+    // Active Planovo group selection
+    private val _selectedPlanovoGroup = MutableStateFlow(
+        PlanovoGroupsCatalog.bundledGroups.firstOrNull { it.id == 41 } ?: PlanovoGroupsCatalog.bundledGroups.first()
+    )
+    val selectedPlanovoGroup: StateFlow<PlanovoGroup> = _selectedPlanovoGroup.asStateFlow()
 
     private val _apiUrlInput = MutableStateFlow(fetcher.defaultProfiles.first().apiUrl)
     val apiUrlInput: StateFlow<String> = _apiUrlInput.asStateFlow()
@@ -120,25 +143,58 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     init {
-        // Automatically check if initial schedule exists, if not sync college schedule
         viewModelScope.launch {
             checkPermissionsAndLoadCalendars()
-            // If database is empty, load initial schedule for smooth first experience
-            repository.allEvents.collect { list ->
-                if (list.isEmpty()) {
-                    syncCollegeScheduleFromApi(
-                        apiUrl = _selectedProfile.value.apiUrl,
-                        groupName = _selectedProfile.value.groupName,
-                        profileId = _selectedProfile.value.id
-                    )
-                }
+            // Immediately sync schedule for default Planovo group 41 if database is empty
+            val currentEvents = repository.allEvents.first()
+            if (currentEvents.isEmpty()) {
+                val defaultGroup = _selectedPlanovoGroup.value
+                selectAndSyncPlanovoGroup(defaultGroup)
             }
+        }
+    }
+
+    /**
+     * Instantly switches to the chosen Planovo group and immediately fetches its schedule.
+     */
+    fun selectAndSyncPlanovoGroup(group: PlanovoGroup) {
+        _selectedPlanovoGroup.value = group
+        _groupNameInput.value = group.code
+        _apiUrlInput.value = group.calendarIcsUrl
+        _selectedProfile.value = CollegeProfile(
+            id = "planovo_${group.id}",
+            collegeName = "Planovo (КЭМС)",
+            groupName = "${group.code} (${group.course} курс)",
+            apiUrl = group.calendarIcsUrl,
+            description = group.direction
+        )
+        syncCollegeScheduleFromApi(
+            apiUrl = group.calendarIcsUrl,
+            groupName = group.code,
+            profileId = "planovo_${group.id}"
+        )
+    }
+
+    /**
+     * Custom group ID quick selector (e.g. typing any number like 42, 85, etc.)
+     */
+    fun selectAndSyncCustomGroupId(groupId: Int, codeLabel: String = "Группа #$groupId") {
+        val existing = PlanovoGroupsCatalog.bundledGroups.firstOrNull { it.id == groupId }
+        if (existing != null) {
+            selectAndSyncPlanovoGroup(existing)
+        } else {
+            val custom = PlanovoGroup(
+                id = groupId,
+                code = codeLabel,
+                course = 1,
+                direction = "Planovo ID $groupId"
+            )
+            selectAndSyncPlanovoGroup(custom)
         }
     }
 
     fun selectDate(date: String) {
         _selectedDate.value = date
-        // Update current month if needed
         try {
             val parts = date.split("-")
             val year = parts[0].toInt()
@@ -184,7 +240,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _selectedCalendarId.value = id
     }
 
-    // CRUD Events
+    // CRUD Events (Offline first)
     fun addEvent(
         title: String,
         description: String,
@@ -207,13 +263,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 type = type
             )
             val newId = repository.addEvent(event)
-            _statusMessage.value = "Событие добавлено"
+            _statusMessage.value = "Событие сохранено в календаре"
             WidgetUpdateHelper.updateAllWidgets(getApplication())
 
-            // If Google Calendar permission is granted and user has calendar selected, optionally export
-            if (_hasCalendarPermission.value && _selectedCalendarId.value != null) {
+            if (isOnline.value && _hasCalendarPermission.value && _selectedCalendarId.value != null) {
                 repository.exportEventToGoogleCalendar(event.copy(id = newId), _selectedCalendarId.value)
             }
+        }
+    }
+
+    fun updateCollegeClass(event: EventEntity) {
+        viewModelScope.launch {
+            repository.updateEvent(event.copy(isCustomEdited = true))
+            _statusMessage.value = "Пара обновлена"
+            WidgetUpdateHelper.updateAllWidgets(getApplication())
         }
     }
 
@@ -225,14 +288,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    // CRUD Notes
+    // CRUD Notes & Checklists (Offline first)
     fun addNote(
         title: String,
         content: String,
         date: String?,
         tag: String,
         colorHex: String,
-        isPinned: Boolean = false
+        isPinned: Boolean = false,
+        checklistItems: List<ChecklistItem> = emptyList()
     ) {
         viewModelScope.launch {
             val note = NoteEntity(
@@ -241,7 +305,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 date = date,
                 tag = tag,
                 colorHex = colorHex,
-                isPinned = isPinned
+                isPinned = isPinned,
+                checklistJson = NoteEntity.serializeChecklist(checklistItems)
             )
             repository.addNote(note)
             _statusMessage.value = "Заметка сохранена"
@@ -252,6 +317,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.updateNote(note.copy(updatedAt = System.currentTimeMillis()))
             _statusMessage.value = "Заметка обновлена"
+        }
+    }
+
+    fun toggleChecklistItem(note: NoteEntity, itemId: String, isDone: Boolean) {
+        viewModelScope.launch {
+            repository.toggleChecklistItem(note, itemId, isDone)
         }
     }
 
@@ -276,15 +347,41 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     ) {
         viewModelScope.launch {
             _isSyncing.value = true
-            _statusMessage.value = "Загрузка расписания колледжа по API..."
+            _statusMessage.value = if (isOnline.value) "Загрузка расписания колледжа по API..." else "Синхронизация из локального кэша..."
             val result = repository.syncCollegeSchedule(apiUrl, groupName, profileId)
             _isSyncing.value = false
             if (result.isSuccess) {
                 val count = result.getOrNull() ?: 0
-                _statusMessage.value = "Расписание колледжа обновлено ($count пар)"
+                _statusMessage.value = "Расписание колледжа готово ($count пар)"
                 WidgetUpdateHelper.updateAllWidgets(getApplication())
             } else {
                 _statusMessage.value = "Ошибка: ${result.exceptionOrNull()?.message ?: "Сбой соединения"}"
+            }
+        }
+    }
+
+    // Offline Backup & Restore
+    fun exportBackup() {
+        viewModelScope.launch {
+            val json = repository.exportBackupJson()
+            _backupJsonExported.value = json
+            _statusMessage.value = "Резервная копия сформирована (Офлайн JSON)"
+        }
+    }
+
+    fun clearBackupExportedState() {
+        _backupJsonExported.value = null
+    }
+
+    fun importBackup(jsonString: String, replaceExisting: Boolean) {
+        viewModelScope.launch {
+            val result = repository.importBackupJson(jsonString, replaceExisting)
+            if (result.isSuccess) {
+                val (eventsCount, notesCount) = result.getOrNull() ?: Pair(0, 0)
+                _statusMessage.value = "Успешно импортировано: $eventsCount событий, $notesCount заметок"
+                WidgetUpdateHelper.updateAllWidgets(getApplication())
+            } else {
+                _statusMessage.value = "Ошибка импорта: неверный формат JSON"
             }
         }
     }
@@ -323,16 +420,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun importFromGoogleCalendar() {
         viewModelScope.launch {
+            if (!isOnline.value) {
+                _statusMessage.value = "Нет подключения к интернету для синхронизации с Google"
+                return@launch
+            }
             _isSyncing.value = true
             _statusMessage.value = "Импорт событий из Google Календаря..."
             val count = repository.importGoogleCalendarEvents()
             _isSyncing.value = false
             _statusMessage.value = "Импортировано из Google: $count событий"
+            WidgetUpdateHelper.updateAllWidgets(getApplication())
         }
     }
 
     fun exportCollegeScheduleToGoogle() {
         viewModelScope.launch {
+            if (!isOnline.value) {
+                _statusMessage.value = "Нет сети, но расписание сохранено локально"
+                return@launch
+            }
             _isSyncing.value = true
             _statusMessage.value = "Синхронизация расписания в Google Календарь..."
             val result = repository.exportCollegeScheduleToGoogle(_selectedCalendarId.value)

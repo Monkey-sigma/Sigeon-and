@@ -1,9 +1,17 @@
 package com.example.data.local
 
 import androidx.room.Entity
+import androidx.room.Index
 import androidx.room.PrimaryKey
 
-@Entity(tableName = "events")
+@Entity(
+    tableName = "events",
+    indices = [
+        Index(value = ["date"]),
+        Index(value = ["type"]),
+        Index(value = ["googleEventId"])
+    ]
+)
 data class EventEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
@@ -22,5 +30,6 @@ data class EventEntity(
     val googleEventId: Long? = null,
     val colorHex: String = "#6366F1",
     val isCompleted: Boolean = false,
+    val isCustomEdited: Boolean = false,
     val createdAt: Long = System.currentTimeMillis()
 )

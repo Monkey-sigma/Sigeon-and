@@ -2,8 +2,10 @@ package com.example.data.repository
 
 import com.example.data.api.CollegeScheduleFetcher
 import com.example.data.local.CalendarDao
+import com.example.data.local.ChecklistItem
 import com.example.data.local.EventEntity
 import com.example.data.local.NoteEntity
+import com.example.data.sync.BackupManager
 import com.example.data.sync.DeviceCalendar
 import com.example.data.sync.GoogleCalendarSyncManager
 import com.example.data.sync.SyncResult
@@ -15,6 +17,8 @@ class CalendarRepository(
     private val collegeFetcher: CollegeScheduleFetcher,
     private val syncManager: GoogleCalendarSyncManager
 ) {
+    private val backupManager = BackupManager(calendarDao)
+
     // Events
     val allEvents: Flow<List<EventEntity>> = calendarDao.getAllEvents()
 
@@ -42,6 +46,20 @@ class CalendarRepository(
     suspend fun deleteNote(note: NoteEntity) = calendarDao.deleteNote(note)
 
     suspend fun togglePinNote(id: Long, isPinned: Boolean) = calendarDao.updateNotePinned(id, isPinned)
+
+    suspend fun toggleChecklistItem(note: NoteEntity, itemId: String, isDone: Boolean) {
+        val currentItems = note.getChecklistItems().map {
+            if (it.id == itemId) it.copy(isDone = isDone) else it
+        }
+        val serialized = NoteEntity.serializeChecklist(currentItems)
+        calendarDao.updateNote(note.copy(checklistJson = serialized, updatedAt = System.currentTimeMillis()))
+    }
+
+    // Offline Backup & Restore
+    suspend fun exportBackupJson(): String = backupManager.exportToJson()
+
+    suspend fun importBackupJson(json: String, replaceExisting: Boolean = false): Result<Pair<Int, Int>> =
+        backupManager.importFromJson(json, replaceExisting)
 
     // College Schedule API Sync
     suspend fun syncCollegeSchedule(

@@ -18,6 +18,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -36,6 +37,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -55,6 +57,7 @@ fun CollegeApiConfigDialog(
     var selectedProfile by remember { mutableStateOf(currentProfile) }
     var apiUrl by remember { mutableStateOf(currentApiUrl) }
     var groupName by remember { mutableStateOf(currentGroupName) }
+    var planovoGroupIdInput by remember { mutableStateOf(if (currentApiUrl.contains("/groups/")) currentApiUrl.substringAfter("/groups/").substringBefore("/") else "41") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -69,9 +72,9 @@ fun CollegeApiConfigDialog(
                     tint = SigeonPrimary
                 )
                 Text(
-                    text = "API Расписания колледжа",
+                    text = "Синхронизация Planovo & API",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 20.sp
+                    fontSize = 19.sp
                 )
             }
         },
@@ -80,17 +83,18 @@ fun CollegeApiConfigDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .verticalScroll(rememberScrollState()),
-                verticalArrangement = Arrangement.spacedBy(14.dp)
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "Выберите профиль учебного заведения или укажите свой собственный API URL расписания:",
+                    text = "Выберите учебное заведение или укажите прямую ссылку на Planovo (.ics) / REST API:",
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                // Profiles list
+                // Profiles list (Planovo, КИТ, etc.)
                 allProfiles.forEach { profile ->
                     val isSelected = selectedProfile.id == profile.id
+                    val isPlanovo = profile.apiUrl.contains("planovo.pro")
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -126,16 +130,35 @@ fun CollegeApiConfigDialog(
                             }
 
                             Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    text = profile.collegeName,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
-                                )
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Text(
+                                        text = profile.collegeName,
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    if (isPlanovo) {
+                                        Spacer(modifier = Modifier.size(6.dp))
+                                        Surface(
+                                            shape = RoundedCornerShape(4.dp),
+                                            color = Color(0xFF10B981).copy(alpha = 0.15f)
+                                        ) {
+                                            Text(
+                                                text = "iCal .ICS",
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF10B981),
+                                                modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                            )
+                                        }
+                                    }
+                                }
+
                                 Text(
                                     text = "Группа: ${profile.groupName}",
                                     fontSize = 12.sp,
-                                    color = SigeonPrimary
+                                    color = SigeonPrimary,
+                                    fontWeight = FontWeight.SemiBold
                                 )
                                 Text(
                                     text = profile.description,
@@ -148,11 +171,45 @@ fun CollegeApiConfigDialog(
                     }
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
+                Spacer(modifier = Modifier.height(2.dp))
 
-                // Custom Group and API URL
+                // Quick Planovo ID Generator
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Column(modifier = Modifier.padding(10.dp)) {
+                        Text(
+                            text = "Быстрая настройка Planovo по ID группы:",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = planovoGroupIdInput,
+                                onValueChange = {
+                                    planovoGroupIdInput = it
+                                    if (it.isNotBlank()) {
+                                        apiUrl = "https://planovo.pro/api/v1/public/groups/${it.trim()}/calendar.ics"
+                                    }
+                                },
+                                label = { Text("ID группы Planovo (например: 41)") },
+                                modifier = Modifier.weight(1f),
+                                shape = RoundedCornerShape(8.dp),
+                                singleLine = true
+                            )
+                        }
+                    }
+                }
+
+                // Full URL & Group Inputs
                 Text(
-                    text = "Параметры API:",
+                    text = "Параметры ссылки и группы:",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -170,9 +227,12 @@ fun CollegeApiConfigDialog(
                 OutlinedTextField(
                     value = apiUrl,
                     onValueChange = { apiUrl = it },
-                    label = { Text("URL эндпоинта расписания (REST API)") },
+                    label = { Text("URL расписания (Planovo .ics или JSON)") },
+                    leadingIcon = {
+                        Icon(Icons.Default.Link, contentDescription = null, tint = SigeonPrimary)
+                    },
                     supportingText = {
-                        Text("Поддерживаются форматы JSON (массивы занятий, RUZ, 1C:Колледж, OpenSchedule)")
+                        Text("Поддерживаются: Planovo calendar.ics, 1C:Колледж, Modeus, RUZ, OpenSchedule")
                     },
                     modifier = Modifier.fillMaxWidth().testTag("api_url_input"),
                     shape = RoundedCornerShape(12.dp),
@@ -192,7 +252,7 @@ fun CollegeApiConfigDialog(
             ) {
                 Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.size(6.dp))
-                Text("Обновить по API")
+                Text("Синхронизировать")
             }
         },
         dismissButton = {

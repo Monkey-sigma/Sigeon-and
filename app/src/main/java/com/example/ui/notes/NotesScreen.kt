@@ -23,6 +23,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
@@ -31,6 +33,8 @@ import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -56,6 +60,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.NoteEntity
@@ -82,7 +87,8 @@ fun NotesScreen(
         allNotes.filter { note ->
             val matchesQuery = searchQuery.isBlank() ||
                 note.title.contains(searchQuery, ignoreCase = true) ||
-                note.content.contains(searchQuery, ignoreCase = true)
+                note.content.contains(searchQuery, ignoreCase = true) ||
+                note.checklistJson.contains(searchQuery, ignoreCase = true)
             val matchesTag = selectedTagFilter == "Все" || note.tag == selectedTagFilter
             matchesQuery && matchesTag
         }
@@ -119,7 +125,7 @@ fun NotesScreen(
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "${allNotes.size} заметок в календаре",
+                                text = "${allNotes.size} заметок • Офлайн база",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -223,7 +229,7 @@ fun NotesScreen(
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Нажмите + чтобы создать новую заметку или задание",
+                                text = "Нажмите + чтобы создать новую заметку, задание или чек-лист",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -260,7 +266,10 @@ fun NotesScreen(
                         note = note,
                         onPinToggle = { viewModel.togglePinNote(note) },
                         onEdit = { editingNote = note },
-                        onDelete = { viewModel.deleteNote(note) }
+                        onDelete = { viewModel.deleteNote(note) },
+                        onToggleChecklistItem = { itemId, isDone ->
+                            viewModel.toggleChecklistItem(note, itemId, isDone)
+                        }
                     )
                 }
             }
@@ -283,7 +292,10 @@ fun NotesScreen(
                         note = note,
                         onPinToggle = { viewModel.togglePinNote(note) },
                         onEdit = { editingNote = note },
-                        onDelete = { viewModel.deleteNote(note) }
+                        onDelete = { viewModel.deleteNote(note) },
+                        onToggleChecklistItem = { itemId, isDone ->
+                            viewModel.toggleChecklistItem(note, itemId, isDone)
+                        }
                     )
                 }
             }
@@ -294,8 +306,8 @@ fun NotesScreen(
     if (showAddDialog) {
         AddEditNoteDialog(
             onDismiss = { showAddDialog = false },
-            onConfirm = { title, content, date, tag, color, isPinned ->
-                viewModel.addNote(title, content, date, tag, color, isPinned)
+            onConfirm = { title, content, date, tag, color, isPinned, items ->
+                viewModel.addNote(title, content, date, tag, color, isPinned, items)
                 showAddDialog = false
             }
         )
@@ -306,7 +318,7 @@ fun NotesScreen(
         AddEditNoteDialog(
             existingNote = editingNote,
             onDismiss = { editingNote = null },
-            onConfirm = { title, content, date, tag, color, isPinned ->
+            onConfirm = { title, content, date, tag, color, isPinned, items ->
                 viewModel.updateNote(
                     editingNote!!.copy(
                         title = title,
@@ -314,7 +326,8 @@ fun NotesScreen(
                         date = date,
                         tag = tag,
                         colorHex = color,
-                        isPinned = isPinned
+                        isPinned = isPinned,
+                        checklistJson = NoteEntity.serializeChecklist(items)
                     )
                 )
                 editingNote = null
@@ -328,8 +341,12 @@ fun NoteCardItem(
     note: NoteEntity,
     onPinToggle: () -> Unit,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onToggleChecklistItem: (itemId: String, isDone: Boolean) -> Unit
 ) {
+    val checklist = remember(note.checklistJson) { note.getChecklistItems() }
+    val completedCount = checklist.count { it.isDone }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -362,6 +379,22 @@ fun NoteCardItem(
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (checklist.isNotEmpty()) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = if (completedCount == checklist.size) Color(0xFF10B981).copy(alpha = 0.2f) else MaterialTheme.colorScheme.surfaceVariant,
+                            modifier = Modifier.padding(end = 6.dp)
+                        ) {
+                            Text(
+                                text = "$completedCount/${checklist.size}",
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (completedCount == checklist.size) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+                    }
+
                     IconButton(onClick = onPinToggle, modifier = Modifier.size(30.dp)) {
                         Icon(
                             imageVector = Icons.Default.PushPin,
@@ -399,6 +432,37 @@ fun NoteCardItem(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 4
                 )
+            }
+
+            // Interactive Checklists rendered directly on Card
+            if (checklist.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(8.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    checklist.forEach { item ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable { onToggleChecklistItem(item.id, !item.isDone) }
+                                .padding(vertical = 2.dp)
+                        ) {
+                            Checkbox(
+                                checked = item.isDone,
+                                onCheckedChange = { onToggleChecklistItem(item.id, it) },
+                                colors = CheckboxDefaults.colors(checkedColor = SigeonPrimary),
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = item.text,
+                                fontSize = 13.sp,
+                                textDecoration = if (item.isDone) TextDecoration.LineThrough else TextDecoration.None,
+                                color = if (item.isDone) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
             }
 
             if (note.date != null) {

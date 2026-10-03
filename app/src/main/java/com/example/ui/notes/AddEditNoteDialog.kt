@@ -20,17 +20,22 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Bookmark
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.FormatListBulleted
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
@@ -38,6 +43,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -49,6 +55,7 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.data.local.ChecklistItem
 import com.example.data.local.NoteEntity
 import com.example.ui.theme.SigeonPrimary
 
@@ -64,7 +71,8 @@ fun AddEditNoteDialog(
         date: String?,
         tag: String,
         colorHex: String,
-        isPinned: Boolean
+        isPinned: Boolean,
+        checklistItems: List<ChecklistItem>
     ) -> Unit
 ) {
     var title by remember { mutableStateOf(existingNote?.title ?: "") }
@@ -86,6 +94,16 @@ fun AddEditNoteDialog(
     )
     var selectedColor by remember { mutableStateOf(existingNote?.colorHex ?: colors[0]) }
     var titleError by remember { mutableStateOf(false) }
+
+    // Checklist items state
+    val checklistItems = remember {
+        mutableStateListOf<ChecklistItem>().apply {
+            if (existingNote != null) {
+                addAll(existingNote.getChecklistItems())
+            }
+        }
+    }
+    var newChecklistText by remember { mutableStateOf("") }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -133,12 +151,94 @@ fun AddEditNoteDialog(
                 OutlinedTextField(
                     value = content,
                     onValueChange = { content = it },
-                    label = { Text("Текст заметки / задачи...") },
+                    label = { Text("Описание / текст...") },
                     modifier = Modifier.fillMaxWidth().testTag("note_content_input"),
                     shape = RoundedCornerShape(12.dp),
-                    minLines = 4,
-                    maxLines = 8
+                    minLines = 3,
+                    maxLines = 6
                 )
+
+                // Checklist Section
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Icon(
+                        Icons.Default.FormatListBulleted,
+                        contentDescription = null,
+                        tint = SigeonPrimary,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Text(
+                        text = "Чек-лист / Задачи (${checklistItems.size}):",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+
+                // Checklist items list
+                checklistItems.forEachIndexed { index, item ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 2.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Checkbox(
+                            checked = item.isDone,
+                            onCheckedChange = { isChecked ->
+                                checklistItems[index] = item.copy(isDone = isChecked)
+                            },
+                            colors = CheckboxDefaults.colors(checkedColor = SigeonPrimary)
+                        )
+                        Text(
+                            text = item.text,
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f)
+                        )
+                        IconButton(
+                            onClick = { checklistItems.removeAt(index) },
+                            modifier = Modifier.size(28.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Clear,
+                                contentDescription = "Удалить пункт",
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+
+                // Add item field
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedTextField(
+                        value = newChecklistText,
+                        onValueChange = { newChecklistText = it },
+                        placeholder = { Text("Новый пункт задания...") },
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(10.dp),
+                        singleLine = true
+                    )
+
+                    Button(
+                        onClick = {
+                            if (newChecklistText.isNotBlank()) {
+                                checklistItems.add(ChecklistItem(text = newChecklistText.trim()))
+                                newChecklistText = ""
+                            }
+                        },
+                        enabled = newChecklistText.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(containerColor = SigeonPrimary),
+                        shape = RoundedCornerShape(10.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                    }
+                }
 
                 // Category Tag Selector
                 Text(
@@ -247,7 +347,8 @@ fun AddEditNoteDialog(
                         if (attachToDate && date.isNotBlank()) date.trim() else null,
                         selectedTag,
                         selectedColor,
-                        isPinned
+                        isPinned,
+                        checklistItems.toList()
                     )
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = SigeonPrimary),

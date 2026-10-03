@@ -2,7 +2,6 @@ package com.example.ui.calendar
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -17,24 +16,26 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
-import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Event
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -59,18 +60,29 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.EventEntity
 import com.example.data.local.NoteEntity
 import com.example.ui.EventFilter
 import com.example.ui.MainViewModel
+import com.example.ui.college.EditCollegeClassDialog
+import com.example.ui.components.PulsatingLiveBadge
+import com.example.ui.components.bounceClick
 import com.example.ui.notes.AddEditNoteDialog
 import com.example.ui.theme.SigeonPrimary
 import com.example.ui.theme.SigeonPrimaryDark
 import java.text.SimpleDateFormat
+import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+
+data class QuickDayItem(
+    val dateString: String,
+    val dayName: String,
+    val dayNumber: String
+)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -89,6 +101,7 @@ fun CalendarScreen(
 
     var showAddEventDialog by remember { mutableStateOf(false) }
     var showAddNoteDialog by remember { mutableStateOf(false) }
+    var editingCollegeEvent by remember { mutableStateOf<EventEntity?>(null) }
     var isCalendarExpanded by remember { mutableStateOf(true) }
 
     // Human-readable date title
@@ -103,10 +116,37 @@ fun CalendarScreen(
         }
     }
 
+    // Quick Day Strip around selected date (7 days window)
+    val quickDays = remember(selectedDate) {
+        val list = mutableListOf<QuickDayItem>()
+        val cal = Calendar.getInstance()
+        try {
+            val parts = selectedDate.split("-")
+            cal.set(parts[0].toInt(), parts[1].toInt() - 1, parts[2].toInt())
+        } catch (_: Exception) {}
+
+        cal.add(Calendar.DAY_OF_YEAR, -3)
+        val df = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+        val dName = SimpleDateFormat("EEE", Locale("ru"))
+        val dNum = SimpleDateFormat("d", Locale.getDefault())
+
+        for (i in 0 until 7) {
+            list.add(
+                QuickDayItem(
+                    dateString = df.format(cal.time),
+                    dayName = dName.format(cal.time).uppercase(),
+                    dayNumber = dNum.format(cal.time)
+                )
+            )
+            cal.add(Calendar.DAY_OF_YEAR, 1)
+        }
+        list
+    }
+
     // Filter items based on active chip
     val filteredCollegeClasses = remember(dayEvents, activeFilter) {
         if (activeFilter == EventFilter.ALL || activeFilter == EventFilter.COLLEGE) {
-            dayEvents.filter { it.type == "COLLEGE" }
+            dayEvents.filter { it.type == "COLLEGE" }.sortedBy { it.collegePairNumber }
         } else emptyList()
     }
 
@@ -153,7 +193,7 @@ fun CalendarScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Text(
-                                text = "Расписание & Заметки",
+                                text = "Офлайн-календарь & Заметки",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -222,9 +262,48 @@ fun CalendarScreen(
                 }
             }
 
+            // Quick Day Strip (Horizontal Day Carousel)
+            item {
+                LazyRow(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    items(quickDays, key = { it.dateString }) { day ->
+                        val isSelected = day.dateString == selectedDate
+                        Surface(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(12.dp))
+                                .clickable { viewModel.selectDate(day.dateString) },
+                            shape = RoundedCornerShape(12.dp),
+                            color = if (isSelected) SigeonPrimary else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Text(
+                                    text = day.dayName,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSelected) Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = day.dayNumber,
+                                    fontSize = 15.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
             // Selected Date Banner & Filter Chips
             item {
-                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -320,8 +399,9 @@ fun CalendarScreen(
                 }
 
                 items(filteredCollegeClasses, key = { "class_${it.id}" }) { event ->
-                    CollegeClassCard(
+                    CalendarCollegeClassItem(
                         event = event,
+                        onEdit = { editingCollegeEvent = event },
                         onExportToGoogle = { viewModel.exportEventToGoogle(event) },
                         onDelete = { viewModel.deleteEvent(event) },
                         onAddNoteForClass = {
@@ -371,8 +451,11 @@ fun CalendarScreen(
                 }
 
                 items(filteredNotes, key = { "note_${it.id}" }) { note ->
-                    CalendarNoteCard(
+                    CalendarInteractiveNoteCard(
                         note = note,
+                        onToggleChecklistItem = { itemId, isDone ->
+                            viewModel.toggleChecklistItem(note, itemId, isDone)
+                        },
                         onDelete = { viewModel.deleteNote(note) }
                     )
                 }
@@ -397,164 +480,23 @@ fun CalendarScreen(
         AddEditNoteDialog(
             initialDate = selectedDate,
             onDismiss = { showAddNoteDialog = false },
-            onConfirm = { title, content, date, tag, color, isPinned ->
-                viewModel.addNote(title, content, date, tag, color, isPinned)
+            onConfirm = { title, content, date, tag, color, isPinned, items ->
+                viewModel.addNote(title, content, date, tag, color, isPinned, items)
                 showAddNoteDialog = false
             }
         )
     }
-}
 
-@Composable
-fun CollegeClassCard(
-    event: EventEntity,
-    onExportToGoogle: () -> Unit,
-    onDelete: () -> Unit,
-    onAddNoteForClass: () -> Unit
-) {
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 5.dp)
-            .testTag("college_class_card_${event.id}"),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            // Pair Number Badge
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = SigeonPrimary.copy(alpha = 0.12f),
-                modifier = Modifier.size(46.dp)
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "№${event.collegePairNumber}",
-                        fontWeight = FontWeight.Bold,
-                        color = SigeonPrimary,
-                        fontSize = 15.sp
-                    )
-                    Text(
-                        text = "пара",
-                        fontSize = 9.sp,
-                        color = SigeonPrimaryDark
-                    )
-                }
+    // Edit College Class Dialog
+    editingCollegeEvent?.let { eventToEdit ->
+        EditCollegeClassDialog(
+            event = eventToEdit,
+            onDismiss = { editingCollegeEvent = null },
+            onConfirm = { updated ->
+                viewModel.updateCollegeClass(updated)
+                editingCollegeEvent = null
             }
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                ) {
-                    Text(
-                        text = "${event.startTime} - ${event.endTime}",
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = SigeonPrimary
-                    )
-
-                    Surface(
-                        shape = RoundedCornerShape(6.dp),
-                        color = Color(android.graphics.Color.parseColor(event.colorHex)).copy(alpha = 0.15f)
-                    ) {
-                        Text(
-                            text = event.collegeLessonType.ifBlank { "Пара" },
-                            fontSize = 10.sp,
-                            fontWeight = FontWeight.Bold,
-                            color = Color(android.graphics.Color.parseColor(event.colorHex)),
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
-                        )
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(3.dp))
-
-                Text(
-                    text = event.collegeSubject.ifBlank { event.title },
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    if (event.collegeRoom.isNotBlank()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.LocationOn,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Text(
-                                text = event.collegeRoom,
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    if (event.collegeTeacher.isNotBlank()) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(
-                                Icons.Default.Person,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(13.dp)
-                            )
-                            Spacer(modifier = Modifier.width(2.dp))
-                            Text(
-                                text = event.collegeTeacher,
-                                fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Quick actions (Add note to class / Export to Google)
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                IconButton(
-                    onClick = onAddNoteForClass,
-                    modifier = Modifier.size(34.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.EditNote,
-                        contentDescription = "Д/З к паре",
-                        tint = SigeonPrimary
-                    )
-                }
-
-                IconButton(
-                    onClick = onExportToGoogle,
-                    modifier = Modifier.size(34.dp)
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Sync,
-                        contentDescription = "В Google Календарь",
-                        tint = Color(0xFF4285F4)
-                    )
-                }
-            }
-        }
+        )
     }
 }
 
@@ -664,10 +606,231 @@ fun EventItemCard(
 }
 
 @Composable
-fun CalendarNoteCard(
+fun CalendarCollegeClassItem(
+    event: EventEntity,
+    onEdit: () -> Unit,
+    onExportToGoogle: () -> Unit,
+    onDelete: () -> Unit,
+    onAddNoteForClass: () -> Unit
+) {
+    val isLiveNow = remember(event.startTime, event.endTime, event.date) {
+        try {
+            val now = Calendar.getInstance()
+            val df = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+            if (df.format(now.time) == event.date) {
+                val currentMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
+                val startParts = event.startTime.split(":")
+                val endParts = event.endTime.split(":")
+                val startMinutes = startParts[0].toInt() * 60 + startParts[1].toInt()
+                val endMinutes = endParts[0].toInt() * 60 + endParts[1].toInt()
+                currentMinutes in startMinutes..endMinutes
+            } else false
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 5.dp)
+            .bounceClick(scaleDown = 0.98f) { onEdit() }
+            .testTag("college_class_card_${event.id}"),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = if (isLiveNow) SigeonPrimary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isLiveNow) 4.dp else 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            if (isLiveNow) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(bottom = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    PulsatingLiveBadge(text = "ИДЕТ СЕЙЧАС")
+                    Text(
+                        text = "До окончания: ${event.endTime}",
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFFEF4444)
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(12.dp),
+                    color = if (isLiveNow) Color(0xFFEF4444).copy(alpha = 0.15f) else SigeonPrimary.copy(alpha = 0.12f),
+                    modifier = Modifier.size(46.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "№${event.collegePairNumber}",
+                            fontWeight = FontWeight.Bold,
+                            color = if (isLiveNow) Color(0xFFEF4444) else SigeonPrimary,
+                            fontSize = 15.sp
+                        )
+                        Text(
+                            text = "пара",
+                            fontSize = 9.sp,
+                            color = if (isLiveNow) Color(0xFFEF4444) else SigeonPrimaryDark
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "${event.startTime} - ${event.endTime}",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = if (isLiveNow) Color(0xFFEF4444) else SigeonPrimary
+                        )
+
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = Color(android.graphics.Color.parseColor(event.colorHex)).copy(alpha = 0.15f)
+                        ) {
+                            Text(
+                                text = event.collegeLessonType.ifBlank { "Пара" },
+                                fontSize = 10.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color(android.graphics.Color.parseColor(event.colorHex)),
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                            )
+                        }
+
+                        if (event.isCustomEdited) {
+                            Surface(
+                                shape = RoundedCornerShape(6.dp),
+                                color = Color(0xFFF59E0B).copy(alpha = 0.15f)
+                            ) {
+                                Text(
+                                    text = "изменено",
+                                    fontSize = 9.sp,
+                                    color = Color(0xFFF59E0B),
+                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(3.dp))
+
+                    Text(
+                        text = event.collegeSubject.ifBlank { event.title },
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+
+                    Spacer(modifier = Modifier.height(4.dp))
+
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        if (event.collegeRoom.isNotBlank()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.LocationOn,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(
+                                    text = event.collegeRoom,
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        if (event.collegeTeacher.isNotBlank()) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    Icons.Default.Person,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.size(13.dp)
+                                )
+                                Spacer(modifier = Modifier.width(2.dp))
+                                Text(
+                                    text = event.collegeTeacher,
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(
+                        onClick = onEdit,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Редактировать",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onAddNoteForClass,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.EditNote,
+                            contentDescription = "Д/З к паре",
+                            tint = SigeonPrimary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onExportToGoogle,
+                        modifier = Modifier.size(32.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Sync,
+                            contentDescription = "В Google Календарь",
+                            tint = Color(0xFF4285F4),
+                            modifier = Modifier.size(18.dp)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun CalendarInteractiveNoteCard(
     note: NoteEntity,
+    onToggleChecklistItem: (itemId: String, isDone: Boolean) -> Unit,
     onDelete: () -> Unit
 ) {
+    val checklist = remember(note.checklistJson) { note.getChecklistItems() }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -677,13 +840,12 @@ fun CalendarNoteCard(
             containerColor = Color(android.graphics.Color.parseColor(note.colorHex)).copy(alpha = 0.08f)
         )
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
                 Surface(
                     shape = RoundedCornerShape(6.dp),
                     color = Color(android.graphics.Color.parseColor(note.colorHex)).copy(alpha = 0.2f)
@@ -697,32 +859,63 @@ fun CalendarNoteCard(
                     )
                 }
 
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = note.title,
-                    fontWeight = FontWeight.Bold,
-                    fontSize = 14.sp,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                if (note.content.isNotBlank()) {
-                    Spacer(modifier = Modifier.height(2.dp))
-                    Text(
-                        text = note.content,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2
+                IconButton(onClick = onDelete, modifier = Modifier.size(30.dp)) {
+                    Icon(
+                        Icons.Default.DeleteOutline,
+                        contentDescription = "Удалить",
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            IconButton(onClick = onDelete, modifier = Modifier.size(34.dp)) {
-                Icon(
-                    Icons.Default.DeleteOutline,
-                    contentDescription = "Удалить",
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+            Spacer(modifier = Modifier.height(4.dp))
+
+            Text(
+                text = note.title,
+                fontWeight = FontWeight.Bold,
+                fontSize = 14.sp,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+
+            if (note.content.isNotBlank()) {
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = note.content,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2
                 )
+            }
+
+            // Interactive Checklists
+            if (checklist.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    checklist.forEach { item ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(6.dp))
+                                .clickable { onToggleChecklistItem(item.id, !item.isDone) }
+                                .padding(vertical = 1.dp)
+                        ) {
+                            Checkbox(
+                                checked = item.isDone,
+                                onCheckedChange = { onToggleChecklistItem(item.id, it) },
+                                colors = CheckboxDefaults.colors(checkedColor = SigeonPrimary),
+                                modifier = Modifier.size(22.dp)
+                            )
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text(
+                                text = item.text,
+                                fontSize = 12.sp,
+                                textDecoration = if (item.isDone) TextDecoration.LineThrough else TextDecoration.None,
+                                color = if (item.isDone) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                }
             }
         }
     }

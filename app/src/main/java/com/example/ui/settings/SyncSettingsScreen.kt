@@ -23,12 +23,18 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.CloudDownload
+import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.FileUpload
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.Widgets
+import androidx.compose.material.icons.filled.Wifi
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -63,6 +69,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.MainViewModel
 import com.example.ui.college.CollegeApiConfigDialog
+import com.example.ui.college.GroupSelectorBottomSheet
 import com.example.ui.theme.SigeonPrimary
 import com.example.ui.theme.SigeonPrimaryDark
 
@@ -72,6 +79,7 @@ fun SyncSettingsScreen(
     viewModel: MainViewModel,
     modifier: Modifier = Modifier
 ) {
+    val isOnline by viewModel.isOnline.collectAsState()
     val hasCalendarPermission by viewModel.hasCalendarPermission.collectAsState()
     val availableCalendars by viewModel.availableCalendars.collectAsState()
     val selectedCalendarId by viewModel.selectedCalendarId.collectAsState()
@@ -81,8 +89,12 @@ fun SyncSettingsScreen(
     val groupName by viewModel.groupNameInput.collectAsState()
     val allEvents by viewModel.allEvents.collectAsState()
     val allNotes by viewModel.allNotes.collectAsState()
+    val exportedJson by viewModel.backupJsonExported.collectAsState()
 
     var showCollegeConfigDialog by remember { mutableStateOf(false) }
+    var showGroupSelectorSheet by remember { mutableStateOf(false) }
+    var showImportDialog by remember { mutableStateOf(false) }
+    val selectedPlanovoGroup by viewModel.selectedPlanovoGroup.collectAsState()
     var calendarDropdownExpanded by remember { mutableStateOf(false) }
 
     // Calendar permission request launcher
@@ -115,12 +127,12 @@ fun SyncSettingsScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "Синхронизация и API",
+                                text = "Синхронизация и Офлайн",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold
                             )
                             Text(
-                                text = "Google Календарь & Расписание",
+                                text = "Google, API и Резервное копирование",
                                 style = MaterialTheme.typography.labelSmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -138,6 +150,53 @@ fun SyncSettingsScreen(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
+            // Real-time Network Status Card
+            item {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = if (isOnline) Color(0xFF10B981).copy(alpha = 0.08f) else Color(0xFFF59E0B).copy(alpha = 0.08f)
+                    ),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(14.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        Surface(
+                            shape = CircleShape,
+                            color = if (isOnline) Color(0xFF10B981).copy(alpha = 0.2f) else Color(0xFFF59E0B).copy(alpha = 0.2f),
+                            modifier = Modifier.size(38.dp)
+                        ) {
+                            Box(contentAlignment = Alignment.Center) {
+                                Icon(
+                                    imageVector = if (isOnline) Icons.Default.Wifi else Icons.Default.WifiOff,
+                                    contentDescription = null,
+                                    tint = if (isOnline) Color(0xFF10B981) else Color(0xFFF59E0B)
+                                )
+                            }
+                        }
+
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = if (isOnline) "Подключение к сети активно" else "Автономный режим (Офлайн)",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Text(
+                                text = if (isOnline) "Доступна синхронизация с Google и обновление API" else "Все события, пары и заметки сохраняются в базе Room локально",
+                                fontSize = 12.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
             // Google Calendar Sync Section
             item {
                 Card(
@@ -212,7 +271,6 @@ fun SyncSettingsScreen(
                                 Text("Предоставить доступ к Календарю")
                             }
                         } else {
-                            // Calendar Account Selector Dropdown
                             val currentCalName = availableCalendars.firstOrNull { it.id == selectedCalendarId }?.displayName
                                 ?: availableCalendars.firstOrNull { it.id == selectedCalendarId }?.accountName
                                 ?: "Основной Google Календарь"
@@ -254,7 +312,6 @@ fun SyncSettingsScreen(
 
                             Spacer(modifier = Modifier.height(12.dp))
 
-                            // Sync Buttons
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp)
@@ -273,7 +330,7 @@ fun SyncSettingsScreen(
 
                                 OutlinedButton(
                                     onClick = { viewModel.importFromGoogleCalendar() },
-                                    enabled = !isSyncing,
+                                    enabled = !isSyncing && isOnline,
                                     shape = RoundedCornerShape(10.dp),
                                     modifier = Modifier.weight(1f).testTag("sync_import_button")
                                 ) {
@@ -348,6 +405,21 @@ fun SyncSettingsScreen(
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 2
                                 )
+                                if (apiUrl.contains("planovo.pro")) {
+                                    Spacer(modifier = Modifier.height(6.dp))
+                                    Surface(
+                                        shape = RoundedCornerShape(6.dp),
+                                        color = Color(0xFF10B981).copy(alpha = 0.15f)
+                                    ) {
+                                        Text(
+                                            text = "✓ Синхронизация Planovo iCal (.ics) активна",
+                                            fontSize = 10.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = Color(0xFF10B981),
+                                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                        )
+                                    }
+                                }
                             }
                         }
 
@@ -364,23 +436,113 @@ fun SyncSettingsScreen(
                                 enabled = !isSyncing,
                                 shape = RoundedCornerShape(10.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = SigeonPrimary),
-                                modifier = Modifier.weight(1f).testTag("sync_college_button")
+                                modifier = Modifier.weight(1.2f).testTag("sync_college_button")
                             ) {
                                 if (isSyncing) {
                                     CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
                                 } else {
                                     Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(16.dp))
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Text("Загрузить по API", fontSize = 12.sp)
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text("Обновить", fontSize = 12.sp)
                                 }
+                            }
+
+                            OutlinedButton(
+                                onClick = { showGroupSelectorSheet = true },
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1.4f).testTag("change_group_button")
+                            ) {
+                                Icon(Icons.Default.Groups, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Выбрать группу", fontSize = 11.sp)
                             }
 
                             OutlinedButton(
                                 onClick = { showCollegeConfigDialog = true },
                                 shape = RoundedCornerShape(10.dp),
-                                modifier = Modifier.weight(1f).testTag("edit_api_config_button")
+                                modifier = Modifier.weight(0.9f).testTag("edit_api_config_button")
                             ) {
-                                Text("Настроить API", fontSize = 12.sp)
+                                Text("API", fontSize = 12.sp)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Offline Backup & Restore Section
+            item {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("backup_card")
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFF10B981).copy(alpha = 0.15f),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.FileUpload,
+                                        contentDescription = null,
+                                        tint = Color(0xFF10B981)
+                                    )
+                                }
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Офлайн Резервное копирование",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Экспорт и импорт базы данных в JSON",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFF10B981)
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            text = "Вы можете создать автономную резервную копию всех пар, заметок и событий в виде JSON-файла без необходимости подключения к интернету.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+
+                        Spacer(modifier = Modifier.height(12.dp))
+
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Button(
+                                onClick = { viewModel.exportBackup() },
+                                shape = RoundedCornerShape(10.dp),
+                                colors = ButtonDefaults.buttonColors(containerColor = Color(0xFF10B981)),
+                                modifier = Modifier.weight(1f).testTag("export_backup_button")
+                            ) {
+                                Icon(Icons.Default.FileUpload, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Экспорт JSON", fontSize = 12.sp)
+                            }
+
+                            OutlinedButton(
+                                onClick = { showImportDialog = true },
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier.weight(1f).testTag("import_backup_button")
+                            ) {
+                                Icon(Icons.Default.Download, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text("Импорт JSON", fontSize = 12.sp)
                             }
                         }
                     }
@@ -540,7 +702,7 @@ fun SyncSettingsScreen(
                                 fontSize = 14.sp
                             )
                             Text(
-                                text = "Умный органайзер для студентов: календарь, заметки, пары по API и Google Календарь.",
+                                text = "Умный органайзер для студентов: календарь, заметки, пары по API, виджет и полная офлайн-поддержка.",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -564,6 +726,37 @@ fun SyncSettingsScreen(
                 viewModel.setGroupName(newGroupName)
                 viewModel.syncCollegeScheduleFromApi(newApiUrl, newGroupName, profile.id)
                 showCollegeConfigDialog = false
+            }
+        )
+    }
+
+    exportedJson?.let { json ->
+        ExportBackupDialog(
+            jsonContent = json,
+            onDismiss = { viewModel.clearBackupExportedState() }
+        )
+    }
+
+    if (showImportDialog) {
+        ImportBackupDialog(
+            onDismiss = { showImportDialog = false },
+            onImport = { json, replace ->
+                viewModel.importBackup(json, replace)
+            }
+        )
+    }
+
+    if (showGroupSelectorSheet) {
+        GroupSelectorBottomSheet(
+            currentGroupId = selectedPlanovoGroup.id,
+            onDismiss = { showGroupSelectorSheet = false },
+            onGroupSelected = { group ->
+                viewModel.selectAndSyncPlanovoGroup(group)
+                showGroupSelectorSheet = false
+            },
+            onCustomGroupSubmit = { customId, customCode ->
+                viewModel.selectAndSyncCustomGroupId(customId, customCode)
+                showGroupSelectorSheet = false
             }
         )
     }
