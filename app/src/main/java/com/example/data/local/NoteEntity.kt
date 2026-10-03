@@ -30,6 +30,7 @@ data class NoteEntity(
     val colorHex: String = "#6366F1",
     val isPinned: Boolean = false,
     val checklistJson: String = "", // Serialized ChecklistItem list
+    val imageUri: String? = null, // Local path or URI to attached user image
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 ) {

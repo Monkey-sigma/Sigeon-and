@@ -1,9 +1,6 @@
 package com.example.ui.college
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -16,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -51,6 +47,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.api.PlanovoGroup
@@ -68,7 +65,7 @@ fun GroupSelectorBottomSheet(
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var searchQuery by remember { mutableStateOf("") }
-    var selectedCourseFilter by remember { mutableStateOf<Int?>(null) } // null = All
+    var selectedCourseFilter by remember { mutableStateOf<Int?>(null) }
     var showCustomIdInput by remember { mutableStateOf(false) }
     var customIdText by remember { mutableStateOf("") }
 
@@ -125,12 +122,18 @@ fun GroupSelectorBottomSheet(
                         Text(
                             text = "Выбор учебной группы",
                             fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
+                            fontSize = 18.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
                         )
                         Text(
                             text = "Planovo • Расписание загрузится сразу",
                             fontSize = 12.sp,
-                            color = SigeonPrimary
+                            color = SigeonPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
                         )
                     }
                 }
@@ -144,6 +147,8 @@ fun GroupSelectorBottomSheet(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF10B981),
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                     )
                 }
@@ -155,7 +160,7 @@ fun GroupSelectorBottomSheet(
             OutlinedTextField(
                 value = searchQuery,
                 onValueChange = { searchQuery = it },
-                placeholder = { Text("Поиск группы (ои31, 41, э21...)") },
+                placeholder = { Text("Поиск группы (ои31, 41, э21...)", maxLines = 1, softWrap = false) },
                 leadingIcon = {
                     Icon(Icons.Default.Search, contentDescription = null, tint = SigeonPrimary)
                 },
@@ -170,7 +175,8 @@ fun GroupSelectorBottomSheet(
                     .fillMaxWidth()
                     .testTag("group_search_input"),
                 shape = RoundedCornerShape(14.dp),
-                singleLine = true
+                singleLine = true,
+                maxLines = 1
             )
 
             Spacer(modifier = Modifier.height(10.dp))
@@ -184,7 +190,7 @@ fun GroupSelectorBottomSheet(
                     FilterChip(
                         selected = selectedCourseFilter == null,
                         onClick = { selectedCourseFilter = null },
-                        label = { Text("Все курсы") },
+                        label = { Text("Все курсы", maxLines = 1, softWrap = false) },
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor = SigeonPrimary.copy(alpha = 0.18f),
                             selectedLabelColor = SigeonPrimary
@@ -198,7 +204,7 @@ fun GroupSelectorBottomSheet(
                             onClick = {
                                 selectedCourseFilter = if (selectedCourseFilter == course) null else course
                             },
-                            label = { Text("$course курс") },
+                            label = { Text("$course курс", maxLines = 1, softWrap = false) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = SigeonPrimary.copy(alpha = 0.18f),
                                 selectedLabelColor = SigeonPrimary
@@ -223,7 +229,10 @@ fun GroupSelectorBottomSheet(
                     text = if (showCustomIdInput) "− Скрыть ручной ввод ID" else "+ Ввести другой ID группы Planovo вручную",
                     fontSize = 12.sp,
                     fontWeight = FontWeight.SemiBold,
-                    color = SigeonPrimary
+                    color = SigeonPrimary,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    softWrap = false
                 )
             }
 
@@ -238,11 +247,12 @@ fun GroupSelectorBottomSheet(
                     OutlinedTextField(
                         value = customIdText,
                         onValueChange = { customIdText = it.filter { ch -> ch.isDigit() } },
-                        label = { Text("ID группы (число)") },
-                        placeholder = { Text("41") },
+                        label = { Text("ID группы (число)", maxLines = 1) },
+                        placeholder = { Text("41", maxLines = 1) },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp),
-                        singleLine = true
+                        singleLine = true,
+                        maxLines = 1
                     )
 
                     Button(
@@ -256,7 +266,7 @@ fun GroupSelectorBottomSheet(
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = SigeonPrimary)
                     ) {
-                        Text("Применить")
+                        Text("Применить", maxLines = 1, softWrap = false)
                     }
                 }
             }
@@ -319,7 +329,9 @@ fun GroupItemRow(
                         text = group.code,
                         fontWeight = FontWeight.Bold,
                         fontSize = 15.sp,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        softWrap = false
                     )
 
                     Surface(
@@ -331,6 +343,8 @@ fun GroupItemRow(
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Bold,
                             color = SigeonPrimary,
+                            maxLines = 1,
+                            softWrap = false,
                             modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                         )
                     }
@@ -338,7 +352,9 @@ fun GroupItemRow(
                     Text(
                         text = "ID: ${group.id}",
                         fontSize = 10.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
 
@@ -348,7 +364,9 @@ fun GroupItemRow(
                     text = group.direction,
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    softWrap = false
                 )
             }
 

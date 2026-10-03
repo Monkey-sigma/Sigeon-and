@@ -3,6 +3,8 @@ package com.example.ui
 import android.app.Application
 import android.appwidget.AppWidgetManager
 import android.content.ComponentName
+import android.content.Context
+import android.net.Uri
 import android.os.Build
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -18,6 +20,7 @@ import com.example.data.repository.CalendarRepository
 import com.example.data.sync.ConnectivityObserver
 import com.example.data.sync.DeviceCalendar
 import com.example.data.sync.GoogleCalendarSyncManager
+import com.example.util.ImageStorageHelper
 import com.example.widget.CollegeScheduleWidgetProvider
 import com.example.widget.WidgetUpdateHelper
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -52,8 +55,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val syncManager = GoogleCalendarSyncManager(application)
     val repository = CalendarRepository(db.calendarDao(), fetcher, syncManager)
     private val connectivityObserver = ConnectivityObserver(application)
+    private val prefs = application.getSharedPreferences("sigeon_prefs", Context.MODE_PRIVATE)
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+
+    // Custom Cover / Banner Image for Schedule & App
+    private val _customCoverImageUri = MutableStateFlow<String?>(
+        prefs.getString("cover_image_uri", null)
+    )
+    val customCoverImageUri: StateFlow<String?> = _customCoverImageUri.asStateFlow()
 
     // Network connectivity
     val isOnline: StateFlow<Boolean> = connectivityObserver.isOnline.stateIn(
@@ -150,8 +160,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (currentEvents.isEmpty()) {
                 val defaultGroup = _selectedPlanovoGroup.value
                 selectAndSyncPlanovoGroup(defaultGroup)
+            } else {
+                WidgetUpdateHelper.updateAllWidgets(getApplication())
             }
         }
+    }
+
+    /**
+     * Custom cover image setter (persists to SharedPreferences)
+     */
+    fun setCustomCoverImage(imageUri: String?) {
+        _customCoverImageUri.value = imageUri
+        prefs.edit().putString("cover_image_uri", imageUri).apply()
+        _statusMessage.value = if (imageUri != null) "Обложка обновлена" else "Обложка сброшена"
+    }
+
+    /**
+     * Save user-picked photo to app internal storage
+     */
+    suspend fun saveImageLocally(uri: Uri): String? {
+        return ImageStorageHelper.saveImageToInternalStorage(getApplication(), uri)
     }
 
     /**
@@ -161,13 +189,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _selectedPlanovoGroup.value = group
         _groupNameInput.value = group.code
         _apiUrlInput.value = group.calendarIcsUrl
-        _selectedProfile.value = CollegeProfile(
+        val profile = CollegeProfile(
             id = "planovo_${group.id}",
             collegeName = "Planovo (КЭМС)",
             groupName = "${group.code} (${group.course} курс)",
             apiUrl = group.calendarIcsUrl,
             description = group.direction
         )
+        _selectedProfile.value = profile
+
+        // Save active group to preferences for Widget
+        prefs.edit()
+            .putString("selected_group_name", group.code)
+            .putString("selected_college_name", "Planovo")
+            .apply()
+
         syncCollegeScheduleFromApi(
             apiUrl = group.calendarIcsUrl,
             groupName = group.code,
@@ -234,6 +270,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _selectedProfile.value = profile
         _apiUrlInput.value = profile.apiUrl
         _groupNameInput.value = profile.groupName
+        prefs.edit()
+            .putString("selected_group_name", profile.groupName)
+            .putString("selected_college_name", profile.collegeName)
+            .apply()
     }
 
     fun setSelectedCalendarId(id: Long?) {
@@ -249,7 +289,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         endTime: String,
         location: String,
         colorHex: String,
-        type: String = "EVENT"
+        type: String = "EVENT",
+        imageUri: String? = null
     ) {
         viewModelScope.launch {
             val event = EventEntity(
@@ -260,7 +301,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 endTime = endTime,
                 location = location,
                 colorHex = colorHex,
-                type = type
+                type = type,
+                imageUri = imageUri
             )
             val newId = repository.addEvent(event)
             _statusMessage.value = "Событие сохранено в календаре"
@@ -280,8 +322,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun updateEvent(event: EventEntity) {
+        viewModelScope.launch {
+            repository.updateEvent(event)
+            _statusMessage.value = "Событие обновлено"
+            WidgetUpdateHelper.updateAllWidgets(getApplication())
+        }
+    }
+
     fun deleteEvent(event: EventEntity) {
         viewModelScope.launch {
+            ImageStorageHelper.deleteImage(event.imageUri)
             repository.deleteEvent(event)
             _statusMessage.value = "Событие удалено"
             WidgetUpdateHelper.updateAllWidgets(getApplication())
@@ -296,7 +347,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         tag: String,
         colorHex: String,
         isPinned: Boolean = false,
-        checklistItems: List<ChecklistItem> = emptyList()
+        checklistItems: List<ChecklistItem> = emptyList(),
+        imageUri: String? = null
     ) {
         viewModelScope.launch {
             val note = NoteEntity(
@@ -306,7 +358,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 tag = tag,
                 colorHex = colorHex,
                 isPinned = isPinned,
-                checklistJson = NoteEntity.serializeChecklist(checklistItems)
+                checklistJson = NoteEntity.serializeChecklist(checklistItems),
+                imageUri = imageUri
             )
             repository.addNote(note)
             _statusMessage.value = "Заметка сохранена"
@@ -328,6 +381,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteNote(note: NoteEntity) {
         viewModelScope.launch {
+            ImageStorageHelper.deleteImage(note.imageUri)
             repository.deleteNote(note)
             _statusMessage.value = "Заметка удалена"
         }

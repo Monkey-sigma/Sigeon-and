@@ -23,10 +23,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.Event
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.filled.LocationOn
@@ -58,11 +60,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
 import com.example.data.local.EventEntity
 import com.example.data.local.NoteEntity
 import com.example.ui.EventFilter
@@ -103,13 +109,14 @@ fun CalendarScreen(
     var showAddNoteDialog by remember { mutableStateOf(false) }
     var editingCollegeEvent by remember { mutableStateOf<EventEntity?>(null) }
     var isCalendarExpanded by remember { mutableStateOf(true) }
+    var fullscreenImageUri by remember { mutableStateOf<String?>(null) }
 
     // Human-readable date title
     val formattedDateTitle = remember(selectedDate) {
         try {
             val parser = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
             val dateObj = parser.parse(selectedDate) ?: Date()
-            val formatter = SimpleDateFormat("EEEE, d MMMM", Locale("ru"))
+            val formatter = SimpleDateFormat("EEEE, d MMMM", Locale.forLanguageTag("ru"))
             formatter.format(dateObj).replaceFirstChar { it.uppercase() }
         } catch (e: Exception) {
             selectedDate
@@ -127,7 +134,7 @@ fun CalendarScreen(
 
         cal.add(Calendar.DAY_OF_YEAR, -3)
         val df = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val dName = SimpleDateFormat("EEE", Locale("ru"))
+        val dName = SimpleDateFormat("EEE", Locale.forLanguageTag("ru"))
         val dNum = SimpleDateFormat("d", Locale.getDefault())
 
         for (i in 0 until 7) {
@@ -190,12 +197,18 @@ fun CalendarScreen(
                                 text = "SIGEON Calendar",
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                             Text(
                                 text = "Офлайн-календарь & Заметки",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                         }
                     }
@@ -287,13 +300,17 @@ fun CalendarScreen(
                                     text = day.dayName,
                                     fontSize = 10.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (isSelected) Color.White.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                                 Text(
                                     text = day.dayNumber,
                                     fontSize = 15.sp,
                                     fontWeight = FontWeight.Bold,
-                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -314,12 +331,18 @@ fun CalendarScreen(
                                 text = formattedDateTitle,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                             Text(
                                 text = "$totalItemsCount событий / пар на этот день",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                         }
                     }
@@ -336,7 +359,7 @@ fun CalendarScreen(
                             FilterChip(
                                 selected = isSelected,
                                 onClick = { viewModel.setFilter(filter) },
-                                label = { Text(filter.label) },
+                                label = { Text(filter.label, maxLines = 1, softWrap = false) },
                                 colors = FilterChipDefaults.filterChipColors(
                                     selectedContainerColor = SigeonPrimary.copy(alpha = 0.15f),
                                     selectedLabelColor = SigeonPrimary
@@ -373,13 +396,19 @@ fun CalendarScreen(
                                 text = "На этот день ничего не запланировано",
                                 style = MaterialTheme.typography.titleSmall,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
+                                color = MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
                                 text = "Нажмите + чтобы добавить событие, пару или заметку",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                         }
                     }
@@ -394,6 +423,8 @@ fun CalendarScreen(
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = SigeonPrimary,
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                     )
                 }
@@ -404,6 +435,7 @@ fun CalendarScreen(
                         onEdit = { editingCollegeEvent = event },
                         onExportToGoogle = { viewModel.exportEventToGoogle(event) },
                         onDelete = { viewModel.deleteEvent(event) },
+                        onImageClick = { fullscreenImageUri = it },
                         onAddNoteForClass = {
                             viewModel.addNote(
                                 title = "Д/З: ${event.collegeSubject}",
@@ -425,6 +457,8 @@ fun CalendarScreen(
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                     )
                 }
@@ -433,7 +467,8 @@ fun CalendarScreen(
                     EventItemCard(
                         event = event,
                         onDelete = { viewModel.deleteEvent(event) },
-                        onExportToGoogle = { viewModel.exportEventToGoogle(event) }
+                        onExportToGoogle = { viewModel.exportEventToGoogle(event) },
+                        onImageClick = { fullscreenImageUri = it }
                     )
                 }
             }
@@ -446,6 +481,8 @@ fun CalendarScreen(
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.Bold,
                         color = Color(0xFF10B981),
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
                     )
                 }
@@ -456,7 +493,36 @@ fun CalendarScreen(
                         onToggleChecklistItem = { itemId, isDone ->
                             viewModel.toggleChecklistItem(note, itemId, isDone)
                         },
-                        onDelete = { viewModel.deleteNote(note) }
+                        onDelete = { viewModel.deleteNote(note) },
+                        onImageClick = { fullscreenImageUri = it }
+                    )
+                }
+            }
+        }
+    }
+
+    // Fullscreen Image Dialog
+    fullscreenImageUri?.let { imgPath ->
+        Dialog(onDismissRequest = { fullscreenImageUri = null }) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = Color.Black.copy(alpha = 0.9f),
+                modifier = Modifier.fillMaxWidth().padding(8.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        IconButton(onClick = { fullscreenImageUri = null }) {
+                            Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color.White)
+                        }
+                    }
+                    AsyncImage(
+                        model = imgPath,
+                        contentDescription = "Фото",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxWidth().height(350.dp).clip(RoundedCornerShape(12.dp))
                     )
                 }
             }
@@ -468,8 +534,17 @@ fun CalendarScreen(
         AddEditEventDialog(
             initialDate = selectedDate,
             onDismiss = { showAddEventDialog = false },
-            onConfirm = { title, desc, date, start, end, loc, color ->
-                viewModel.addEvent(title, desc, date, start, end, loc, color)
+            onConfirm = { title, desc, date, start, end, loc, color, imageUri ->
+                viewModel.addEvent(
+                    title = title,
+                    description = desc,
+                    date = date,
+                    startTime = start,
+                    endTime = end,
+                    location = loc,
+                    colorHex = color,
+                    imageUri = imageUri
+                )
                 showAddEventDialog = false
             }
         )
@@ -480,8 +555,8 @@ fun CalendarScreen(
         AddEditNoteDialog(
             initialDate = selectedDate,
             onDismiss = { showAddNoteDialog = false },
-            onConfirm = { title, content, date, tag, color, isPinned, items ->
-                viewModel.addNote(title, content, date, tag, color, isPinned, items)
+            onConfirm = { title, content, date, tag, color, isPinned, items, imageUri ->
+                viewModel.addNote(title, content, date, tag, color, isPinned, items, imageUri)
                 showAddNoteDialog = false
             }
         )
@@ -504,7 +579,8 @@ fun CalendarScreen(
 fun EventItemCard(
     event: EventEntity,
     onDelete: () -> Unit,
-    onExportToGoogle: () -> Unit
+    onExportToGoogle: () -> Unit,
+    onImageClick: (String) -> Unit
 ) {
     Card(
         modifier = Modifier
@@ -514,90 +590,120 @@ fun EventItemCard(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(12.dp)
-                    .clip(CircleShape)
-                    .background(Color(android.graphics.Color.parseColor(event.colorHex)))
-            )
-
-            Spacer(modifier = Modifier.width(12.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                if (event.startTime.isNotBlank()) {
-                    Text(
-                        text = if (event.endTime.isNotBlank()) "${event.startTime} - ${event.endTime}" else event.startTime,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-
-                Text(
-                    text = event.title,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(12.dp)
+                        .clip(CircleShape)
+                        .background(Color(android.graphics.Color.parseColor(event.colorHex)))
                 )
 
-                if (event.description.isNotBlank()) {
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    if (event.startTime.isNotBlank()) {
+                        Text(
+                            text = if (event.endTime.isNotBlank()) "${event.startTime} - ${event.endTime}" else event.startTime,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            softWrap = false
+                        )
+                    }
+
                     Text(
-                        text = event.description,
-                        fontSize = 12.sp,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 2
+                        text = event.title,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
                     )
+
+                    if (event.description.isNotBlank()) {
+                        Text(
+                            text = event.description,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
+                        )
+                    }
+
+                    if (event.location.isNotBlank()) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(top = 2.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.LocationOn,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(12.dp)
+                            )
+                            Spacer(modifier = Modifier.width(2.dp))
+                            Text(
+                                text = event.location,
+                                fontSize = 11.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
+                            )
+                        }
+                    }
                 }
 
-                if (event.location.isNotBlank()) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.padding(top = 2.dp)
+                Row {
+                    if (event.type != "GOOGLE") {
+                        IconButton(
+                            onClick = onExportToGoogle,
+                            modifier = Modifier.size(34.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Sync,
+                                contentDescription = "В Google",
+                                tint = Color(0xFF4285F4)
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = onDelete,
+                        modifier = Modifier.size(34.dp)
                     ) {
                         Icon(
-                            Icons.Default.LocationOn,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(12.dp)
-                        )
-                        Spacer(modifier = Modifier.width(2.dp))
-                        Text(
-                            text = event.location,
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            Icons.Default.DeleteOutline,
+                            contentDescription = "Удалить",
+                            tint = MaterialTheme.colorScheme.error
                         )
                     }
                 }
             }
 
-            Row {
-                if (event.type != "GOOGLE") {
-                    IconButton(
-                        onClick = onExportToGoogle,
-                        modifier = Modifier.size(34.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Sync,
-                            contentDescription = "В Google",
-                            tint = Color(0xFF4285F4)
-                        )
-                    }
-                }
-
-                IconButton(
-                    onClick = onDelete,
-                    modifier = Modifier.size(34.dp)
+            // Display attached photo if present
+            event.imageUri?.let { imgPath ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(130.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onImageClick(imgPath) }
                 ) {
-                    Icon(
-                        Icons.Default.DeleteOutline,
-                        contentDescription = "Удалить",
-                        tint = MaterialTheme.colorScheme.error
+                    AsyncImage(
+                        model = imgPath,
+                        contentDescription = "Фото к событию",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
                     )
                 }
             }
@@ -611,6 +717,7 @@ fun CalendarCollegeClassItem(
     onEdit: () -> Unit,
     onExportToGoogle: () -> Unit,
     onDelete: () -> Unit,
+    onImageClick: (String) -> Unit = {},
     onAddNoteForClass: () -> Unit
 ) {
     val isLiveNow = remember(event.startTime, event.endTime, event.date) {
@@ -656,7 +763,9 @@ fun CalendarCollegeClassItem(
                         text = "До окончания: ${event.endTime}",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFFEF4444)
+                        color = Color(0xFFEF4444),
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
@@ -678,12 +787,16 @@ fun CalendarCollegeClassItem(
                             text = "№${event.collegePairNumber}",
                             fontWeight = FontWeight.Bold,
                             color = if (isLiveNow) Color(0xFFEF4444) else SigeonPrimary,
-                            fontSize = 15.sp
+                            fontSize = 15.sp,
+                            maxLines = 1,
+                            softWrap = false
                         )
                         Text(
                             text = "пара",
                             fontSize = 9.sp,
-                            color = if (isLiveNow) Color(0xFFEF4444) else SigeonPrimaryDark
+                            color = if (isLiveNow) Color(0xFFEF4444) else SigeonPrimaryDark,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -699,7 +812,9 @@ fun CalendarCollegeClassItem(
                             text = "${event.startTime} - ${event.endTime}",
                             fontSize = 12.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (isLiveNow) Color(0xFFEF4444) else SigeonPrimary
+                            color = if (isLiveNow) Color(0xFFEF4444) else SigeonPrimary,
+                            maxLines = 1,
+                            softWrap = false
                         )
 
                         Surface(
@@ -711,6 +826,8 @@ fun CalendarCollegeClassItem(
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = Color(android.graphics.Color.parseColor(event.colorHex)),
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
@@ -724,6 +841,8 @@ fun CalendarCollegeClassItem(
                                     text = "изменено",
                                     fontSize = 9.sp,
                                     color = Color(0xFFF59E0B),
+                                    maxLines = 1,
+                                    softWrap = false,
                                     modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                 )
                             }
@@ -736,7 +855,10 @@ fun CalendarCollegeClassItem(
                         text = event.collegeSubject.ifBlank { event.title },
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
                     )
 
                     Spacer(modifier = Modifier.height(4.dp))
@@ -757,7 +879,10 @@ fun CalendarCollegeClassItem(
                                 Text(
                                     text = event.collegeRoom,
                                     fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -774,7 +899,10 @@ fun CalendarCollegeClassItem(
                                 Text(
                                     text = event.collegeTeacher,
                                     fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -819,6 +947,52 @@ fun CalendarCollegeClassItem(
                     }
                 }
             }
+
+            // Attached Photo for College Class
+            event.imageUri?.let { imgPath ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(90.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onImageClick(imgPath) }
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        AsyncImage(
+                            model = imgPath,
+                            contentDescription = "Фото к паре",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(topStart = 8.dp),
+                            color = Color.Black.copy(alpha = 0.6f),
+                            modifier = Modifier.align(Alignment.BottomEnd)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    Icons.Default.Image,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Spacer(modifier = Modifier.width(4.dp))
+                                Text(
+                                    text = "Фото пары",
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    maxLines = 1
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -827,7 +1001,8 @@ fun CalendarCollegeClassItem(
 fun CalendarInteractiveNoteCard(
     note: NoteEntity,
     onToggleChecklistItem: (itemId: String, isDone: Boolean) -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    onImageClick: (String) -> Unit
 ) {
     val checklist = remember(note.checklistJson) { note.getChecklistItems() }
 
@@ -855,6 +1030,8 @@ fun CalendarInteractiveNoteCard(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(android.graphics.Color.parseColor(note.colorHex)),
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                     )
                 }
@@ -874,7 +1051,10 @@ fun CalendarInteractiveNoteCard(
                 text = note.title,
                 fontWeight = FontWeight.Bold,
                 fontSize = 14.sp,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
             )
 
             if (note.content.isNotBlank()) {
@@ -883,8 +1063,30 @@ fun CalendarInteractiveNoteCard(
                     text = note.content,
                     fontSize = 12.sp,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 2
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    softWrap = false
                 )
+            }
+
+            // Display attached image preview if present
+            note.imageUri?.let { imgPath ->
+                Spacer(modifier = Modifier.height(6.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(120.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onImageClick(imgPath) }
+                ) {
+                    AsyncImage(
+                        model = imgPath,
+                        contentDescription = "Фото к заметке",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
 
             // Interactive Checklists
@@ -911,7 +1113,10 @@ fun CalendarInteractiveNoteCard(
                                 text = item.text,
                                 fontSize = 12.sp,
                                 textDecoration = if (item.isDone) TextDecoration.LineThrough else TextDecoration.None,
-                                color = if (item.isDone) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface
+                                color = if (item.isDone) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                         }
                     }

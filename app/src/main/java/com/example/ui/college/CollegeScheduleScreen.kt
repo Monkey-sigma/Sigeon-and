@@ -1,5 +1,9 @@
 package com.example.ui.college
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
@@ -7,7 +11,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,14 +29,19 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudSync
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Edit
-import androidx.compose.material.icons.filled.EditNote
+import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.LocationOn
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Tune
@@ -60,22 +68,32 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
 import com.example.data.local.EventEntity
+import com.example.data.local.NoteEntity
 import com.example.ui.MainViewModel
 import com.example.ui.components.PulsatingLiveBadge
 import com.example.ui.components.bounceClick
 import com.example.ui.notes.AddEditNoteDialog
 import com.example.ui.theme.SigeonPrimary
 import com.example.ui.theme.SigeonPrimaryDark
+import com.example.util.ImageStorageHelper
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -93,11 +111,15 @@ fun CollegeScheduleScreen(
     viewModel: MainViewModel,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+
     val collegeClasses by viewModel.collegeSchedule.collectAsState()
     val isSyncing by viewModel.isSyncing.collectAsState()
     val isOnline by viewModel.isOnline.collectAsState()
     val selectedProfile by viewModel.selectedProfile.collectAsState()
     val selectedPlanovoGroup by viewModel.selectedPlanovoGroup.collectAsState()
+    val customCoverUri by viewModel.customCoverImageUri.collectAsState()
     val apiUrl by viewModel.apiUrlInput.collectAsState()
     val groupName by viewModel.groupNameInput.collectAsState()
 
@@ -106,6 +128,19 @@ fun CollegeScheduleScreen(
     var editingClassEvent by remember { mutableStateOf<EventEntity?>(null) }
     var noteDialogClassDate by remember { mutableStateOf<String?>(null) }
     var noteDialogSubject by remember { mutableStateOf("") }
+    var fullscreenImageUri by remember { mutableStateOf<String?>(null) }
+
+    // Cover image picker
+    val coverPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            coroutineScope.launch {
+                val localPath = ImageStorageHelper.saveImageToInternalStorage(context, uri)
+                viewModel.setCustomCoverImage(localPath)
+            }
+        }
+    }
 
     // Weekday tabs (dates from current week Monday to Saturday)
     val weekDays = remember {
@@ -115,8 +150,8 @@ fun CollegeScheduleScreen(
             set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
         }
         val dayFormatter = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-        val nameFormatter = SimpleDateFormat("EEE", Locale("ru"))
-        val dayNumFormatter = SimpleDateFormat("d MMM", Locale("ru"))
+        val nameFormatter = SimpleDateFormat("EEE", Locale.forLanguageTag("ru"))
+        val dayNumFormatter = SimpleDateFormat("d MMM", Locale.forLanguageTag("ru"))
 
         for (i in 0 until 6) { // Mon-Sat
             val dateStr = dayFormatter.format(cal.time)
@@ -146,7 +181,8 @@ fun CollegeScheduleScreen(
                 title = {
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
                     ) {
                         Surface(
                             shape = CircleShape,
@@ -168,6 +204,7 @@ fun CollegeScheduleScreen(
                             shape = RoundedCornerShape(12.dp),
                             color = SigeonPrimary.copy(alpha = 0.12f),
                             modifier = Modifier
+                                .weight(1f)
                                 .clip(RoundedCornerShape(12.dp))
                                 .bounceClick { showGroupSelectorSheet = true }
                                 .testTag("top_bar_group_switcher")
@@ -176,18 +213,24 @@ fun CollegeScheduleScreen(
                                 verticalAlignment = Alignment.CenterVertically,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
                             ) {
-                                Column {
+                                Column(modifier = Modifier.weight(1f)) {
                                     Text(
                                         text = groupName.ifBlank { "Выбрать группу" },
                                         style = MaterialTheme.typography.titleSmall,
                                         fontWeight = FontWeight.Bold,
-                                        color = SigeonPrimary
+                                        color = SigeonPrimary,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        softWrap = false
                                     )
                                     Text(
                                         text = "Нажмите для смены группы",
                                         style = MaterialTheme.typography.labelSmall,
                                         fontSize = 9.sp,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                        softWrap = false
                                     )
                                 }
                                 Icon(
@@ -223,139 +266,195 @@ fun CollegeScheduleScreen(
                 .fillMaxSize()
                 .padding(innerPadding)
         ) {
-            // College Profile & API Status Card
+            // Custom Cover Banner Header
             Surface(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(horizontal = 16.dp, vertical = 6.dp),
+                    .padding(horizontal = 16.dp, vertical = 4.dp),
                 shape = RoundedCornerShape(16.dp),
                 color = MaterialTheme.colorScheme.surface,
                 tonalElevation = 2.dp,
                 shadowElevation = 1.dp
             ) {
-                Column(modifier = Modifier.padding(14.dp)) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                Column {
+                    // Banner Image container
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(84.dp)
+                            .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp))
                     ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(
-                                    text = selectedProfile.collegeName,
-                                    fontWeight = FontWeight.Bold,
-                                    fontSize = 14.sp,
-                                    color = MaterialTheme.colorScheme.onSurface
+                        if (customCoverUri != null) {
+                            AsyncImage(
+                                model = customCoverUri,
+                                contentDescription = "Пользовательская обложка",
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clickable { fullscreenImageUri = customCoverUri }
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(
+                                        Brush.horizontalGradient(
+                                            listOf(
+                                                Color(0xFF4F46E5),
+                                                Color(0xFF7C3AED),
+                                                Color(0xFF2563EB)
+                                            )
+                                        )
+                                    )
+                            )
+                        }
+
+                        // Gradient overlay for contrast
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .background(
+                                    Brush.verticalGradient(
+                                        listOf(Color.Transparent, Color.Black.copy(alpha = 0.5f))
+                                    )
                                 )
-                                if (apiUrl.contains("planovo.pro")) {
-                                    Spacer(modifier = Modifier.width(6.dp))
-                                    Surface(
-                                        shape = RoundedCornerShape(4.dp),
-                                        color = Color(0xFF10B981).copy(alpha = 0.15f)
+                        )
+
+                        // Cover Photo Buttons
+                        Row(
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .padding(8.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (customCoverUri != null) {
+                                Surface(
+                                    shape = CircleShape,
+                                    color = Color.Black.copy(alpha = 0.6f),
+                                    modifier = Modifier.size(28.dp)
+                                ) {
+                                    IconButton(
+                                        onClick = { viewModel.setCustomCoverImage(null) },
+                                        modifier = Modifier.size(28.dp)
                                     ) {
-                                        Text(
-                                            text = "Planovo",
-                                            fontSize = 10.sp,
-                                            fontWeight = FontWeight.Bold,
-                                            color = Color(0xFF10B981),
-                                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 1.dp)
+                                        Icon(
+                                            Icons.Default.DeleteOutline,
+                                            contentDescription = "Сбросить обложку",
+                                            tint = Color.White,
+                                            modifier = Modifier.size(16.dp)
                                         )
                                     }
                                 }
                             }
 
-                            Spacer(modifier = Modifier.height(2.dp))
-
-                            // Interactive Pill to switch group immediately
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier
-                                    .clip(RoundedCornerShape(8.dp))
-                                    .bounceClick { showGroupSelectorSheet = true }
-                                    .background(SigeonPrimary.copy(alpha = 0.1f))
-                                    .padding(horizontal = 8.dp, vertical = 3.dp)
+                            Surface(
+                                shape = RoundedCornerShape(20.dp),
+                                color = Color.Black.copy(alpha = 0.6f),
+                                modifier = Modifier.clickable {
+                                    coverPickerLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                }
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Groups,
-                                    contentDescription = null,
-                                    tint = SigeonPrimary,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Text(
-                                    text = "Группа: $groupName ▾",
-                                    fontSize = 12.sp,
-                                    color = SigeonPrimary,
-                                    fontWeight = FontWeight.Bold
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.PhotoCamera,
+                                        contentDescription = null,
+                                        tint = Color.White,
+                                        modifier = Modifier.size(14.dp)
+                                    )
+                                    Text(
+                                        text = if (customCoverUri == null) "Своя картинка" else "Изменить",
+                                        color = Color.White,
+                                        fontSize = 10.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
                             }
                         }
 
-                        // API sync button
-                        Button(
-                            onClick = {
-                                viewModel.syncCollegeScheduleFromApi(apiUrl, groupName, selectedProfile.id)
-                            },
-                            enabled = !isSyncing,
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(containerColor = SigeonPrimary),
+                        // College Group Label on Banner
+                        Column(
                             modifier = Modifier
-                                .bounceClick {
-                                    if (!isSyncing) {
-                                        viewModel.syncCollegeScheduleFromApi(apiUrl, groupName, selectedProfile.id)
-                                    }
-                                }
-                                .testTag("refresh_api_button")
+                                .align(Alignment.BottomStart)
+                                .padding(10.dp)
                         ) {
-                            if (isSyncing) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(16.dp),
-                                    color = Color.White,
-                                    strokeWidth = 2.dp
-                                )
-                            } else {
-                                Icon(
-                                    imageVector = if (isOnline) Icons.Default.CloudSync else Icons.Default.CloudOff,
-                                    contentDescription = null,
-                                    modifier = Modifier.size(16.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(if (isOnline) "Обновить" else "Офлайн", fontSize = 12.sp)
-                            }
+                            Text(
+                                text = "${selectedProfile.collegeName} • ${selectedPlanovoGroup.code}",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
+                            )
+                            Text(
+                                text = "Актуальное расписание занятий",
+                                color = Color.White.copy(alpha = 0.85f),
+                                fontSize = 10.sp,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
+                            )
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Sync to Google Calendar action row
+                    // Schedule Status Sub-bar
                     Row(
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 6.dp),
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Text(
-                            text = "В расписании: ${collegeClasses.size} пар",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-
-                        OutlinedButton(
-                            onClick = { viewModel.exportCollegeScheduleToGoogle() },
-                            shape = RoundedCornerShape(10.dp),
-                            modifier = Modifier.testTag("export_schedule_to_google_button")
-                        ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Icon(
-                                imageVector = Icons.Default.Sync,
+                                imageVector = if (isOnline) Icons.Default.CloudSync else Icons.Default.CloudOff,
                                 contentDescription = null,
-                                tint = Color(0xFF4285F4),
+                                tint = if (isOnline) Color(0xFF10B981) else Color(0xFFF59E0B),
                                 modifier = Modifier.size(14.dp)
                             )
-                            Spacer(modifier = Modifier.width(6.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
                             Text(
-                                text = "В Google Календарь",
+                                text = if (isOnline) "Онлайн-синхронизация" else "Офлайн-режим",
                                 fontSize = 11.sp,
-                                color = Color(0xFF4285F4)
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                softWrap = false
                             )
+                        }
+
+                        Surface(
+                            shape = RoundedCornerShape(8.dp),
+                            color = Color(0xFF4285F4).copy(alpha = 0.12f),
+                            modifier = Modifier.clickable { viewModel.exportCollegeScheduleToGoogle() }
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Sync,
+                                    contentDescription = null,
+                                    tint = Color(0xFF4285F4),
+                                    modifier = Modifier.size(14.dp)
+                                )
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(
+                                    text = "В Google Календарь",
+                                    fontSize = 11.sp,
+                                    color = Color(0xFF4285F4),
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
                         }
                     }
                 }
@@ -379,12 +478,16 @@ fun CollegeScheduleScreen(
                                 Text(
                                     text = tabInfo.dayName,
                                     fontSize = 12.sp,
-                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                                 Text(
                                     text = tabInfo.dayDateFormatted,
                                     fontSize = 10.sp,
-                                    color = if (isSelected) SigeonPrimaryDark else MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = if (isSelected) SigeonPrimaryDark else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                             }
                         },
@@ -393,7 +496,7 @@ fun CollegeScheduleScreen(
                 }
             }
 
-            // Sync loading banner with smooth spring animation
+            // Sync loading banner
             AnimatedVisibility(
                 visible = isSyncing,
                 enter = fadeIn() + slideInVertically(spring(dampingRatio = Spring.DampingRatioMediumBouncy)),
@@ -401,42 +504,45 @@ fun CollegeScheduleScreen(
             ) {
                 Surface(
                     color = SigeonPrimary.copy(alpha = 0.12f),
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
-                    shape = RoundedCornerShape(10.dp)
+                    modifier = Modifier.fillMaxWidth()
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.Center
                     ) {
                         CircularProgressIndicator(
                             modifier = Modifier.size(14.dp),
-                            color = SigeonPrimary,
-                            strokeWidth = 2.dp
+                            strokeWidth = 2.dp,
+                            color = SigeonPrimary
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Загрузка расписания группы $groupName...",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = SigeonPrimary
+                            text = "Синхронизация расписания Planovo...",
+                            fontSize = 11.sp,
+                            color = SigeonPrimary,
+                            fontWeight = FontWeight.Medium,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
             }
 
-            // Classes list for chosen day
+            // Schedule List for Selected Day
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
                     .weight(1f),
-                contentPadding = PaddingValues(top = 8.dp, bottom = 80.dp)
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                if (classesForSelectedDay.isEmpty() && !isSyncing) {
+                if (classesForSelectedDay.isEmpty()) {
                     item {
                         Surface(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(16.dp),
+                                .padding(vertical = 32.dp),
                             shape = RoundedCornerShape(16.dp),
                             color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                         ) {
@@ -448,34 +554,37 @@ fun CollegeScheduleScreen(
                                     imageVector = Icons.Default.School,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(44.dp)
+                                    modifier = Modifier.size(48.dp)
                                 )
-                                Spacer(modifier = Modifier.height(10.dp))
+                                Spacer(modifier = Modifier.height(12.dp))
                                 Text(
-                                    text = "На этот день пар нет (или выходной)",
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onSurface
+                                    text = "Пар на этот день нет 🎉",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
-                                Spacer(modifier = Modifier.height(6.dp))
+                                Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Все данные сохраняются локально и доступны без интернета",
+                                    text = "Отдыхайте или выберите другой день недели",
                                     fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                         }
                     }
                 } else {
-                    items(classesForSelectedDay, key = { "class_${it.id}" }) { event ->
+                    items(classesForSelectedDay, key = { it.id }) { lesson ->
                         EnhancedCollegeClassCard(
-                            event = event,
-                            onExportToGoogle = { viewModel.exportEventToGoogle(event) },
-                            onEditClass = { editingClassEvent = event },
-                            onDelete = { viewModel.deleteEvent(event) },
-                            onAddNoteForClass = {
-                                noteDialogClassDate = event.date
-                                noteDialogSubject = event.collegeSubject
+                            lesson = lesson,
+                            onEditClick = { editingClassEvent = lesson },
+                            onImageClick = { imgUri -> fullscreenImageUri = imgUri },
+                            onAddNoteClick = {
+                                noteDialogClassDate = lesson.date
+                                noteDialogSubject = lesson.collegeSubject.ifBlank { lesson.title }
                             }
                         )
                     }
@@ -484,7 +593,7 @@ fun CollegeScheduleScreen(
         }
     }
 
-    // Group Selector Bottom Sheet (Instant Group Switcher)
+    // Group Selector Bottom Sheet
     if (showGroupSelectorSheet) {
         GroupSelectorBottomSheet(
             currentGroupId = selectedPlanovoGroup.id,
@@ -500,88 +609,148 @@ fun CollegeScheduleScreen(
         )
     }
 
-    // Config Dialog
+    // API Configuration Dialog
     if (showConfigDialog) {
         CollegeApiConfigDialog(
-            currentProfile = selectedProfile,
-            allProfiles = viewModel.fetcher.defaultProfiles,
             currentApiUrl = apiUrl,
             currentGroupName = groupName,
+            profiles = viewModel.fetcher.defaultProfiles,
             onDismiss = { showConfigDialog = false },
-            onConfirm = { profile, newApiUrl, newGroupName ->
+            onSave = { newUrl, newGroup ->
+                viewModel.setApiUrl(newUrl)
+                viewModel.setGroupName(newGroup)
+                viewModel.syncCollegeScheduleFromApi(newUrl, newGroup)
+                showConfigDialog = false
+            },
+            onSelectProfile = { profile ->
                 viewModel.selectProfile(profile)
-                viewModel.setApiUrl(newApiUrl)
-                viewModel.setGroupName(newGroupName)
-                viewModel.syncCollegeScheduleFromApi(newApiUrl, newGroupName, profile.id)
+                viewModel.syncCollegeScheduleFromApi(profile.apiUrl, profile.groupName, profile.id)
                 showConfigDialog = false
             }
         )
     }
 
-    // Edit Class Dialog (Offline modification)
-    editingClassEvent?.let { eventToEdit ->
+    // Edit Class Dialog
+    editingClassEvent?.let { event ->
         EditCollegeClassDialog(
-            event = eventToEdit,
+            event = event,
             onDismiss = { editingClassEvent = null },
-            onConfirm = { updatedEvent ->
-                viewModel.updateCollegeClass(updatedEvent)
+            onConfirm = { updated ->
+                viewModel.updateCollegeClass(updated)
                 editingClassEvent = null
             }
         )
     }
 
-    // Note dialog triggered from class
-    if (noteDialogClassDate != null) {
+    // Add Note for Class Dialog
+    noteDialogClassDate?.let { date ->
         AddEditNoteDialog(
-            initialDate = noteDialogClassDate,
-            onDismiss = { noteDialogClassDate = null },
-            onConfirm = { title, content, date, tag, color, isPinned, items ->
+            initialDate = date,
+            onDismiss = {
+                noteDialogClassDate = null
+                noteDialogSubject = ""
+            },
+            onConfirm = { title, content, noteDate, tag, color, isPinned, items, imageUri ->
                 viewModel.addNote(
-                    title = if (title.isNotBlank()) title else "Д/З: $noteDialogSubject",
+                    title = if (title.isNotBlank()) title else "Заметка: $noteDialogSubject",
                     content = content,
-                    date = date,
-                    tag = "Д/З",
-                    colorHex = "#6366F1",
+                    date = noteDate,
+                    tag = tag,
+                    colorHex = color,
                     isPinned = isPinned,
-                    checklistItems = items
+                    checklistItems = items,
+                    imageUri = imageUri
                 )
                 noteDialogClassDate = null
+                noteDialogSubject = ""
             }
         )
+    }
+
+    // Fullscreen Image Viewer Dialog
+    fullscreenImageUri?.let { uri ->
+        Dialog(onDismissRequest = { fullscreenImageUri = null }) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = Color.Black,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(8.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxWidth()) {
+                    AsyncImage(
+                        model = uri,
+                        contentDescription = "Просмотр фото",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(380.dp)
+                    )
+
+                    Surface(
+                        shape = CircleShape,
+                        color = Color.Black.copy(alpha = 0.6f),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(8.dp)
+                            .size(36.dp)
+                    ) {
+                        IconButton(
+                            onClick = { fullscreenImageUri = null },
+                            modifier = Modifier.size(36.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Close,
+                                contentDescription = "Закрыть",
+                                tint = Color.White,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
 @Composable
 fun EnhancedCollegeClassCard(
-    event: EventEntity,
-    onExportToGoogle: () -> Unit,
-    onEditClass: () -> Unit,
-    onDelete: () -> Unit,
-    onAddNoteForClass: () -> Unit
+    lesson: EventEntity,
+    onEditClick: () -> Unit,
+    onImageClick: (String) -> Unit = {},
+    onAddNoteClick: () -> Unit
 ) {
-    val isLiveNow = remember(event.startTime, event.endTime, event.date) {
-        try {
-            val now = Calendar.getInstance()
-            val df = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-            if (df.format(now.time) == event.date) {
-                val currentMinutes = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-                val startParts = event.startTime.split(":")
-                val endParts = event.endTime.split(":")
-                val startMinutes = startParts[0].toInt() * 60 + startParts[1].toInt()
-                val endMinutes = endParts[0].toInt() * 60 + endParts[1].toInt()
-                currentMinutes in startMinutes..endMinutes
-            } else false
-        } catch (_: Exception) {
-            false
+    val currentTime = remember { SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date()) }
+    val todayDate = remember { SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date()) }
+
+    val isLiveNow = remember(lesson, currentTime, todayDate) {
+        if (lesson.date != todayDate) false
+        else {
+            try {
+                val curMin = timeToMinutes(currentTime)
+                val startMin = timeToMinutes(lesson.startTime)
+                val endMin = timeToMinutes(lesson.endTime)
+                curMin in startMin..endMin
+            } catch (e: Exception) {
+                false
+            }
         }
+    }
+
+    val typeColor = when (lesson.collegeLessonType.lowercase()) {
+        "лекция" -> Color(0xFF3B82F6)
+        "практика" -> Color(0xFF10B981)
+        "лабораторная", "лабораторная работа" -> Color(0xFF8B5CF6)
+        "экзамен", "зачет" -> Color(0xFFEF4444)
+        else -> SigeonPrimary
     }
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 5.dp)
-            .bounceClick(scaleDown = 0.98f) { onEditClass() }
-            .testTag("college_class_card_${event.id}"),
+            .clip(RoundedCornerShape(16.dp))
+            .clickable { onEditClick() }
+            .testTag("college_class_card_${lesson.id}"),
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = if (isLiveNow) SigeonPrimary.copy(alpha = 0.08f) else MaterialTheme.colorScheme.surface
@@ -589,185 +758,216 @@ fun EnhancedCollegeClassCard(
         elevation = CardDefaults.cardElevation(defaultElevation = if (isLiveNow) 4.dp else 2.dp)
     ) {
         Column(modifier = Modifier.padding(14.dp)) {
-            // Live status badge if class is going right now!
-            if (isLiveNow) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(bottom = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    PulsatingLiveBadge(text = "ИДЕТ СЕЙЧАС")
-                    Text(
-                        text = "До окончания: ${event.endTime}",
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.SemiBold,
-                        color = Color(0xFFEF4444)
-                    )
-                }
-            }
-
+            // Header Row: Pair Number + Time + Live Badge
             Row(
                 modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Pair Number Badge
-                Surface(
-                    shape = RoundedCornerShape(12.dp),
-                    color = if (isLiveNow) Color(0xFFEF4444).copy(alpha = 0.15f) else SigeonPrimary.copy(alpha = 0.12f),
-                    modifier = Modifier.size(46.dp)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                    Surface(
+                        shape = CircleShape,
+                        color = typeColor,
+                        modifier = Modifier.size(24.dp)
                     ) {
-                        Text(
-                            text = "№${event.collegePairNumber}",
-                            fontWeight = FontWeight.Bold,
-                            color = if (isLiveNow) Color(0xFFEF4444) else SigeonPrimary,
-                            fontSize = 15.sp
-                        )
-                        Text(
-                            text = "пара",
-                            fontSize = 9.sp,
-                            color = if (isLiveNow) Color(0xFFEF4444) else SigeonPrimaryDark
-                        )
+                        Box(contentAlignment = Alignment.Center) {
+                            Text(
+                                text = "${lesson.collegePairNumber}",
+                                color = Color.White,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                softWrap = false
+                            )
+                        }
                     }
+
+                    Text(
+                        text = "${lesson.startTime} – ${lesson.endTime}",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    if (isLiveNow) {
+                        PulsatingLiveBadge()
+                    }
 
-                Column(modifier = Modifier.weight(1f)) {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            text = "${event.startTime} - ${event.endTime}",
-                            fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = if (isLiveNow) Color(0xFFEF4444) else SigeonPrimary
-                        )
-
+                    if (lesson.collegeLessonType.isNotBlank()) {
                         Surface(
                             shape = RoundedCornerShape(6.dp),
-                            color = Color(android.graphics.Color.parseColor(event.colorHex)).copy(alpha = 0.15f)
+                            color = typeColor.copy(alpha = 0.15f)
                         ) {
                             Text(
-                                text = event.collegeLessonType.ifBlank { "Пара" },
+                                text = lesson.collegeLessonType,
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Bold,
-                                color = Color(android.graphics.Color.parseColor(event.colorHex)),
+                                color = typeColor,
+                                maxLines = 1,
+                                softWrap = false,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
                         }
-
-                        if (event.isCustomEdited) {
-                            Surface(
-                                shape = RoundedCornerShape(6.dp),
-                                color = Color(0xFFF59E0B).copy(alpha = 0.15f)
-                            ) {
-                                Text(
-                                    text = "изменено",
-                                    fontSize = 9.sp,
-                                    color = Color(0xFFF59E0B),
-                                    modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
-                                )
-                            }
-                        }
                     }
+                }
+            }
 
-                    Spacer(modifier = Modifier.height(3.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
-                    Text(
-                        text = event.collegeSubject.ifBlank { event.title },
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
+            // Subject Title (Single Line with Ellipsis)
+            Text(
+                text = lesson.collegeSubject.ifBlank { lesson.title },
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
+            )
 
-                    Spacer(modifier = Modifier.height(4.dp))
-
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(10.dp)
-                    ) {
-                        if (event.collegeRoom.isNotBlank()) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
+            // Custom Subject / Pair Image Preview if attached
+            if (!lesson.imageUri.isNullOrBlank()) {
+                Spacer(modifier = Modifier.height(6.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(80.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onImageClick(lesson.imageUri) }
+                ) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        AsyncImage(
+                            model = lesson.imageUri,
+                            contentDescription = "Фото к паре",
+                            contentScale = ContentScale.Crop,
+                            modifier = Modifier.fillMaxSize()
+                        )
+                        Surface(
+                            shape = RoundedCornerShape(topStart = 8.dp),
+                            color = Color.Black.copy(alpha = 0.6f),
+                            modifier = Modifier.align(Alignment.BottomEnd)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Icon(
-                                    Icons.Default.LocationOn,
+                                    Icons.Default.Image,
                                     contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(13.dp)
+                                    tint = Color.White,
+                                    modifier = Modifier.size(12.dp)
                                 )
-                                Spacer(modifier = Modifier.width(2.dp))
+                                Spacer(modifier = Modifier.width(4.dp))
                                 Text(
-                                    text = event.collegeRoom,
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        }
-
-                        if (event.collegeTeacher.isNotBlank()) {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Icon(
-                                    Icons.Default.Person,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    modifier = Modifier.size(13.dp)
-                                )
-                                Spacer(modifier = Modifier.width(2.dp))
-                                Text(
-                                    text = event.collegeTeacher,
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    text = "Фото",
+                                    color = Color.White,
+                                    fontSize = 9.sp,
+                                    maxLines = 1
                                 )
                             }
                         }
                     }
                 }
+            }
 
-                // Quick actions (Edit class, Add note to class / Export to Google)
+            Spacer(modifier = Modifier.height(4.dp))
+
+            // Teacher & Room (Single Line with Ellipsis)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    if (lesson.collegeRoom.isNotBlank()) {
+                        Icon(
+                            imageVector = Icons.Default.LocationOn,
+                            contentDescription = null,
+                            tint = SigeonPrimary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = lesson.collegeRoom,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = SigeonPrimary,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                    }
+
+                    if (lesson.collegeTeacher.isNotBlank()) {
+                        Icon(
+                            imageVector = Icons.Default.Person,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Spacer(modifier = Modifier.width(3.dp))
+                        Text(
+                            text = lesson.collegeTeacher,
+                            fontSize = 12.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
+                        )
+                    }
+                }
+
+                // Quick Action Buttons
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     IconButton(
-                        onClick = onEditClass,
-                        modifier = Modifier.size(32.dp)
+                        onClick = onAddNoteClick,
+                        modifier = Modifier.size(30.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.EventNote,
+                            contentDescription = "Заметка к паре",
+                            tint = SigeonPrimary,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+
+                    IconButton(
+                        onClick = onEditClick,
+                        modifier = Modifier.size(30.dp)
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
                             contentDescription = "Редактировать пару",
                             tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.size(18.dp)
-                        )
-                    }
-
-                    IconButton(
-                        onClick = onAddNoteForClass,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.EditNote,
-                            contentDescription = "Д/З к паре",
-                            tint = SigeonPrimary,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-
-                    IconButton(
-                        onClick = onExportToGoogle,
-                        modifier = Modifier.size(32.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Sync,
-                            contentDescription = "В Google Календарь",
-                            tint = Color(0xFF4285F4),
-                            modifier = Modifier.size(18.dp)
+                            modifier = Modifier.size(16.dp)
                         )
                     }
                 }
             }
         }
+    }
+}
+
+private fun timeToMinutes(timeStr: String): Int {
+    return try {
+        val parts = timeStr.trim().split(":")
+        parts[0].toInt() * 60 + parts[1].toInt()
+    } catch (e: Exception) {
+        0
     }
 }

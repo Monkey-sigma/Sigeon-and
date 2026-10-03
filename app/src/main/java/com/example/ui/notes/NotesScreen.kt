@@ -23,11 +23,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.CheckBox
-import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Search
@@ -58,11 +56,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.Dialog
+import coil.compose.AsyncImage
 import com.example.data.local.NoteEntity
 import com.example.ui.MainViewModel
 import com.example.ui.theme.SigeonPrimary
@@ -81,6 +83,7 @@ fun NotesScreen(
 
     var showAddDialog by remember { mutableStateOf(false) }
     var editingNote by remember { mutableStateOf<NoteEntity?>(null) }
+    var fullscreenImageUri by remember { mutableStateOf<String?>(null) }
 
     // Filter notes
     val filteredNotes = remember(allNotes, searchQuery, selectedTagFilter) {
@@ -102,7 +105,10 @@ fun NotesScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
                         Surface(
                             shape = CircleShape,
                             color = Color(0xFF10B981),
@@ -118,21 +124,19 @@ fun NotesScreen(
                             }
                         }
                         Spacer(modifier = Modifier.width(10.dp))
-                        Column {
-                            Text(
-                                text = "Заметки и Д/З",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = "${allNotes.size} заметок • Офлайн база",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
+                        Text(
+                            text = "Заметки & Задания",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            softWrap = false
+                        )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface)
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                )
             )
         },
         floatingActionButton = {
@@ -140,9 +144,10 @@ fun NotesScreen(
                 onClick = { showAddDialog = true },
                 containerColor = SigeonPrimary,
                 contentColor = Color.White,
-                modifier = Modifier.testTag("fab_create_note")
+                shape = CircleShape,
+                modifier = Modifier.testTag("add_note_fab")
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Создать заметку")
+                Icon(imageVector = Icons.Default.Add, contentDescription = "Добавить заметку")
             }
         }
     ) { innerPadding ->
@@ -150,34 +155,35 @@ fun NotesScreen(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 80.dp)
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
         ) {
-            // Search Bar
+            // Search field
             item {
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Поиск заметок и заданий...") },
+                    placeholder = { Text("Поиск заметок...", maxLines = 1, softWrap = false) },
                     leadingIcon = {
-                        Icon(Icons.Default.Search, contentDescription = null, tint = SigeonPrimary)
+                        Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     },
                     trailingIcon = {
-                        if (searchQuery.isNotBlank()) {
+                        if (searchQuery.isNotEmpty()) {
                             IconButton(onClick = { searchQuery = "" }) {
-                                Icon(Icons.Default.Clear, contentDescription = "Очистить")
+                                Icon(Icons.Default.Clear, contentDescription = "Очистить поиск")
                             }
                         }
                     },
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(vertical = 8.dp)
+                        .padding(bottom = 8.dp)
                         .testTag("notes_search_input"),
                     shape = RoundedCornerShape(14.dp),
-                    singleLine = true
+                    singleLine = true,
+                    maxLines = 1
                 )
             }
 
-            // Tag Filters
+            // Category Filter Chips
             item {
                 FlowRow(
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -190,7 +196,7 @@ fun NotesScreen(
                         FilterChip(
                             selected = isSelected,
                             onClick = { selectedTagFilter = tag },
-                            label = { Text(tag) },
+                            label = { Text(tag, maxLines = 1, softWrap = false) },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = SigeonPrimary.copy(alpha = 0.15f),
                                 selectedLabelColor = SigeonPrimary
@@ -225,13 +231,18 @@ fun NotesScreen(
                             Text(
                                 text = "Заметок не найдено",
                                 style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                softWrap = false
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Нажмите + чтобы создать новую заметку, задание или чек-лист",
+                                text = "Нажмите + чтобы создать заметку или фото-задание",
                                 fontSize = 12.sp,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                         }
                     }
@@ -256,7 +267,9 @@ fun NotesScreen(
                             text = "Закрепленные",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
-                            color = SigeonPrimary
+                            color = SigeonPrimary,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
                 }
@@ -267,6 +280,7 @@ fun NotesScreen(
                         onPinToggle = { viewModel.togglePinNote(note) },
                         onEdit = { editingNote = note },
                         onDelete = { viewModel.deleteNote(note) },
+                        onImageClick = { fullscreenImageUri = it },
                         onToggleChecklistItem = { itemId, isDone ->
                             viewModel.toggleChecklistItem(note, itemId, isDone)
                         }
@@ -282,6 +296,8 @@ fun NotesScreen(
                             text = "Все заметки",
                             style = MaterialTheme.typography.titleSmall,
                             fontWeight = FontWeight.Bold,
+                            maxLines = 1,
+                            softWrap = false,
                             modifier = Modifier.padding(top = 14.dp, bottom = 6.dp)
                         )
                     }
@@ -293,9 +309,38 @@ fun NotesScreen(
                         onPinToggle = { viewModel.togglePinNote(note) },
                         onEdit = { editingNote = note },
                         onDelete = { viewModel.deleteNote(note) },
+                        onImageClick = { fullscreenImageUri = it },
                         onToggleChecklistItem = { itemId, isDone ->
                             viewModel.toggleChecklistItem(note, itemId, isDone)
                         }
+                    )
+                }
+            }
+        }
+    }
+
+    // Fullscreen Image Viewer Dialog
+    fullscreenImageUri?.let { imgPath ->
+        Dialog(onDismissRequest = { fullscreenImageUri = null }) {
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = Color.Black.copy(alpha = 0.9f),
+                modifier = Modifier.fillMaxWidth().padding(8.dp)
+            ) {
+                Column(modifier = Modifier.padding(12.dp)) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.End
+                    ) {
+                        IconButton(onClick = { fullscreenImageUri = null }) {
+                            Icon(Icons.Default.Close, contentDescription = "Закрыть", tint = Color.White)
+                        }
+                    }
+                    AsyncImage(
+                        model = imgPath,
+                        contentDescription = "Фото заметки",
+                        contentScale = ContentScale.Fit,
+                        modifier = Modifier.fillMaxWidth().height(350.dp).clip(RoundedCornerShape(12.dp))
                     )
                 }
             }
@@ -306,8 +351,8 @@ fun NotesScreen(
     if (showAddDialog) {
         AddEditNoteDialog(
             onDismiss = { showAddDialog = false },
-            onConfirm = { title, content, date, tag, color, isPinned, items ->
-                viewModel.addNote(title, content, date, tag, color, isPinned, items)
+            onConfirm = { title, content, date, tag, color, isPinned, items, imageUri ->
+                viewModel.addNote(title, content, date, tag, color, isPinned, items, imageUri)
                 showAddDialog = false
             }
         )
@@ -318,7 +363,7 @@ fun NotesScreen(
         AddEditNoteDialog(
             existingNote = editingNote,
             onDismiss = { editingNote = null },
-            onConfirm = { title, content, date, tag, color, isPinned, items ->
+            onConfirm = { title, content, date, tag, color, isPinned, items, imageUri ->
                 viewModel.updateNote(
                     editingNote!!.copy(
                         title = title,
@@ -327,7 +372,8 @@ fun NotesScreen(
                         tag = tag,
                         colorHex = color,
                         isPinned = isPinned,
-                        checklistJson = NoteEntity.serializeChecklist(items)
+                        checklistJson = NoteEntity.serializeChecklist(items),
+                        imageUri = imageUri
                     )
                 )
                 editingNote = null
@@ -342,6 +388,7 @@ fun NoteCardItem(
     onPinToggle: () -> Unit,
     onEdit: () -> Unit,
     onDelete: () -> Unit,
+    onImageClick: (String) -> Unit,
     onToggleChecklistItem: (itemId: String, isDone: Boolean) -> Unit
 ) {
     val checklist = remember(note.checklistJson) { note.getChecklistItems() }
@@ -374,6 +421,8 @@ fun NoteCardItem(
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Bold,
                         color = Color(android.graphics.Color.parseColor(note.colorHex)),
+                        maxLines = 1,
+                        softWrap = false,
                         modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
                     )
                 }
@@ -389,6 +438,8 @@ fun NoteCardItem(
                                 text = "$completedCount/${checklist.size}",
                                 fontSize = 11.sp,
                                 fontWeight = FontWeight.Bold,
+                                maxLines = 1,
+                                softWrap = false,
                                 color = if (completedCount == checklist.size) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant,
                                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
                             )
@@ -421,7 +472,10 @@ fun NoteCardItem(
                 text = note.title,
                 style = MaterialTheme.typography.titleMedium,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
             )
 
             if (note.content.isNotBlank()) {
@@ -430,8 +484,30 @@ fun NoteCardItem(
                     text = note.content,
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 4
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    softWrap = false
                 )
+            }
+
+            // Display attached image thumbnail if available
+            note.imageUri?.let { imgPath ->
+                Spacer(modifier = Modifier.height(8.dp))
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(130.dp)
+                        .clip(RoundedCornerShape(10.dp))
+                        .clickable { onImageClick(imgPath) }
+                ) {
+                    AsyncImage(
+                        model = imgPath,
+                        contentDescription = "Фото к заметке",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                }
             }
 
             // Interactive Checklists rendered directly on Card
@@ -458,7 +534,10 @@ fun NoteCardItem(
                                 text = item.text,
                                 fontSize = 13.sp,
                                 textDecoration = if (item.isDone) TextDecoration.LineThrough else TextDecoration.None,
-                                color = if (item.isDone) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface
+                                color = if (item.isDone) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.onSurface,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
                             )
                         }
                     }
@@ -479,7 +558,9 @@ fun NoteCardItem(
                         text = "Дата: ${note.date}",
                         fontSize = 11.sp,
                         fontWeight = FontWeight.Medium,
-                        color = SigeonPrimary
+                        color = SigeonPrimary,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }

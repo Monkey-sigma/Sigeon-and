@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.ui.theme.SigeonPrimary
 import com.example.ui.theme.SigeonPrimaryLight
@@ -127,7 +128,14 @@ fun SigeonBottomNavBar(
                         )
                     }
                 },
-                label = { Text(destination.title) },
+                label = {
+                    Text(
+                        text = destination.title,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
+                    )
+                },
                 colors = NavigationBarItemDefaults.colors(
                     selectedIconColor = SigeonPrimary,
                     selectedTextColor = SigeonPrimary,

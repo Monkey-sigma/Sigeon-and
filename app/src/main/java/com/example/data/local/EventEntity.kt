@@ -31,5 +31,6 @@ data class EventEntity(
     val colorHex: String = "#6366F1",
     val isCompleted: Boolean = false,
     val isCustomEdited: Boolean = false,
+    val imageUri: String? = null, // Local path or URI to user attached image/photo
     val createdAt: Long = System.currentTimeMillis()
 )

@@ -1,176 +1,224 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/widget_root"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/widget_bg"
-    android:orientation="vertical"
-    android:padding="14dp">
+    android:background="@drawable/widget_bg">
 
-    <!-- Header Row -->
-    <LinearLayout
+    <!-- Custom User Wallpaper / Cover Image for Widget -->
+    <ImageView
+        android:id="@+id/widget_bg_image"
         android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        android:visibility="gone" />
 
-        <LinearLayout
-            android:layout_width="0dp"
-            android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/widget_title"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="SIGEON • Расписание"
-                android:textColor="#EEF2FF"
-                android:textSize="13sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/widget_subtitle"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="Группа ИС-21"
-                android:textColor="#A5B4FC"
-                android:textSize="11sp" />
-        </LinearLayout>
-
-        <TextView
-            android:id="@+id/widget_date"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginEnd="8dp"
-            android:text="Пт, 2 окт"
-            android:textColor="#C7D2FE"
-            android:textSize="11sp"
-            android:textStyle="bold" />
-
-        <ImageView
-            android:id="@+id/widget_refresh_btn"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:background="?android:attr/selectableItemBackgroundBorderless"
-            android:contentDescription="Обновить"
-            android:padding="4dp"
-            android:src="@drawable/ic_widget_refresh" />
-    </LinearLayout>
-
+    <!-- Dark Scrim Overlay to ensure 100% text readability -->
     <View
+        android:id="@+id/widget_scrim_overlay"
         android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="8dp"
-        android:background="#3730A3" />
+        android:layout_height="match_parent"
+        android:background="#D00F172A" />
 
-    <!-- Active Class Card -->
+    <!-- Main Content Container -->
     <LinearLayout
-        android:id="@+id/widget_active_card"
         android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:background="@drawable/widget_card_bg"
+        android:layout_height="match_parent"
         android:orientation="vertical"
-        android:padding="10dp"
-        android:visibility="visible">
+        android:padding="12dp">
 
+        <!-- Header Row -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:gravity="center_vertical"
             android:orientation="horizontal">
 
-            <TextView
-                android:id="@+id/widget_status_badge"
-                android:layout_width="wrap_content"
+            <LinearLayout
+                android:id="@+id/widget_header_clickable"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:background="@drawable/widget_badge_bg"
-                android:paddingStart="6dp"
-                android:paddingTop="2dp"
-                android:paddingEnd="6dp"
-                android:paddingBottom="2dp"
-                android:text="СЛЕДУЮЩАЯ ПАРА"
-                android:textColor="#FFFFFF"
-                android:textSize="9sp"
-                android:textStyle="bold" />
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/widget_title"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:singleLine="true"
+                    android:text="SIGEON • Расписание"
+                    android:textColor="#EEF2FF"
+                    android:textSize="13sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/widget_subtitle"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:singleLine="true"
+                    android:text="Группа ои31-09/24"
+                    android:textColor="#A5B4FC"
+                    android:textSize="11sp" />
+            </LinearLayout>
 
             <TextView
-                android:id="@+id/widget_pair_time"
+                android:id="@+id/widget_date"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_marginStart="8dp"
-                android:text="10:15 – 11:45"
-                android:textColor="#E0E7FF"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:text="Пт, 2 окт"
+                android:textColor="#C7D2FE"
                 android:textSize="11sp"
                 android:textStyle="bold" />
+
+            <ImageView
+                android:id="@+id/widget_refresh_btn"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="Обновить"
+                android:padding="4dp"
+                android:src="@drawable/ic_widget_refresh" />
         </LinearLayout>
 
-        <TextView
-            android:id="@+id/widget_subject"
+        <View
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="5dp"
-            android:ellipsize="end"
-            android:maxLines="2"
-            android:text="Разработка мобильных приложений"
-            android:textColor="#FFFFFF"
-            android:textSize="13sp"
-            android:textStyle="bold" />
+            android:layout_height="1dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginBottom="6dp"
+            android:background="#3730A3" />
 
+        <!-- Active Class Card -->
+        <LinearLayout
+            android:id="@+id/widget_active_card"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="@drawable/widget_card_bg"
+            android:orientation="vertical"
+            android:padding="8dp"
+            android:visibility="visible">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/widget_status_badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:background="@drawable/widget_badge_bg"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:paddingStart="6dp"
+                    android:paddingTop="2dp"
+                    android:paddingEnd="6dp"
+                    android:paddingBottom="2dp"
+                    android:singleLine="true"
+                    android:text="СЛЕДУЮЩАЯ ПАРА"
+                    android:textColor="#FFFFFF"
+                    android:textSize="9sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/widget_pair_time"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:singleLine="true"
+                    android:text="10:15 – 11:45"
+                    android:textColor="#E0E7FF"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/widget_subject"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="4dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:text="Разработка мобильных приложений"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_details"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:text="📍 Лаб. 402 • 👨‍🏫 Смирнов А.В. (Практика)"
+                android:textColor="#C7D2FE"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <!-- Secondary info / Next pair preview -->
         <TextView
-            android:id="@+id/widget_details"
+            android:id="@+id/widget_next_pair_hint"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="3dp"
+            android:layout_marginTop="4dp"
             android:ellipsize="end"
             android:maxLines="1"
-            android:text="📍 Лаб. 402 • 👨‍🏫 Смирнов А.В. (Практика)"
-            android:textColor="#C7D2FE"
-            android:textSize="11sp" />
-    </LinearLayout>
-
-    <!-- Secondary info / Next pair preview -->
-    <TextView
-        android:id="@+id/widget_next_pair_hint"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="6dp"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:text="Далее: 3 пара • Компьютерные сети (12:15)"
-        android:textColor="#A5B4FC"
-        android:textSize="10sp"
-        android:visibility="visible" />
-
-    <!-- Empty State View -->
-    <LinearLayout
-        android:id="@+id/widget_empty_view"
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_weight="1"
-        android:gravity="center"
-        android:orientation="vertical"
-        android:visibility="gone">
-
-        <TextView
-            android:id="@+id/widget_empty_title"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Пар на сегодня больше нет 🎉"
-            android:textColor="#FFFFFF"
-            android:textSize="13sp"
-            android:textStyle="bold" />
-
-        <TextView
-            android:id="@+id/widget_empty_subtitle"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="2dp"
-            android:text="Нажмите чтобы открыть SIGEON Calendar"
+            android:singleLine="true"
+            android:text="Далее: 3 пара • Компьютерные сети (12:15)"
             android:textColor="#A5B4FC"
-            android:textSize="11sp" />
+            android:textSize="10sp"
+            android:visibility="visible" />
+
+        <!-- Empty State View -->
+        <LinearLayout
+            android:id="@+id/widget_empty_view"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:orientation="vertical"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/widget_empty_title"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:text="Пар на сегодня больше нет 🎉"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_empty_subtitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:singleLine="true"
+                android:text="Нажмите чтобы открыть SIGEON Calendar"
+                android:textColor="#A5B4FC"
+                android:textSize="10sp" />
+        </LinearLayout>
+
     </LinearLayout>
 
-</LinearLayout>
+</FrameLayout>

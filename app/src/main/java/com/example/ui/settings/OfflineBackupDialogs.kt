@@ -39,6 +39,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.SigeonPrimary
@@ -59,7 +60,14 @@ fun ExportBackupDialog(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(Icons.Default.FileUpload, contentDescription = null, tint = SigeonPrimary)
-                Text("Экспорт резервной копии (JSON)", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(
+                    text = "Экспорт резервной копии (JSON)",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    softWrap = false
+                )
             }
         },
         text = {
@@ -101,7 +109,11 @@ fun ExportBackupDialog(
                 ) {
                     Icon(Icons.Default.ContentCopy, contentDescription = null)
                     Spacer(modifier = Modifier.padding(4.dp))
-                    Text(if (copied) "Скопировано в буфер обмена!" else "Копировать JSON в буфер")
+                    Text(
+                        text = if (copied) "Скопировано в буфер обмена!" else "Копировать JSON в буфер",
+                        maxLines = 1,
+                        softWrap = false
+                    )
                 }
             }
         },
@@ -111,7 +123,7 @@ fun ExportBackupDialog(
                 colors = ButtonDefaults.buttonColors(containerColor = SigeonPrimary),
                 shape = RoundedCornerShape(12.dp)
             ) {
-                Text("Закрыть")
+                Text("Закрыть", maxLines = 1, softWrap = false)
             }
         },
         shape = RoundedCornerShape(20.dp)
@@ -134,7 +146,14 @@ fun ImportBackupDialog(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Icon(Icons.Default.Download, contentDescription = null, tint = SigeonPrimary)
-                Text("Импорт из резервной копии", fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                Text(
+                    text = "Импорт из резервной копии",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 18.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    softWrap = false
+                )
             }
         },
         text = {
@@ -153,7 +172,7 @@ fun ImportBackupDialog(
                 OutlinedTextField(
                     value = jsonInput,
                     onValueChange = { jsonInput = it },
-                    label = { Text("JSON данные") },
+                    label = { Text("JSON данные", maxLines = 1, softWrap = false) },
                     placeholder = { Text("{\"version\": 1, \"events\": [...]}") },
                     modifier = Modifier.fillMaxWidth().testTag("import_json_input"),
                     shape = RoundedCornerShape(12.dp),
@@ -171,7 +190,9 @@ fun ImportBackupDialog(
                     )
                     Text(
                         text = "Заменить существующее расписание",
-                        style = MaterialTheme.typography.bodySmall
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
@@ -189,12 +210,12 @@ fun ImportBackupDialog(
                 shape = RoundedCornerShape(12.dp),
                 modifier = Modifier.testTag("confirm_import_button")
             ) {
-                Text("Восстановить")
+                Text("Восстановить", maxLines = 1, softWrap = false)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Отмена")
+                Text("Отмена", maxLines = 1, softWrap = false)
             }
         },
         shape = RoundedCornerShape(20.dp)

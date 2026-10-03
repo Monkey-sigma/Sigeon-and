@@ -32,6 +32,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.local.EventEntity
@@ -76,7 +77,6 @@ fun MonthCalendarView(
             set(Calendar.DAY_OF_MONTH, 1)
         }
 
-        // Get 1-based day of week where Monday is 1, Sunday is 7
         val firstDayOfWeek = when (cal.get(Calendar.DAY_OF_WEEK)) {
             Calendar.MONDAY -> 1
             Calendar.TUESDAY -> 2
@@ -90,7 +90,6 @@ fun MonthCalendarView(
 
         val maxDays = cal.getActualMaximum(Calendar.DAY_OF_MONTH)
 
-        // Previous month filler days
         val prevCal = (cal.clone() as Calendar).apply { add(Calendar.MONTH, -1) }
         val maxPrevDays = prevCal.getActualMaximum(Calendar.DAY_OF_MONTH)
 
@@ -107,7 +106,6 @@ fun MonthCalendarView(
             days.add(CalendarDayInfo(dayNumber = i, dateString = dateStr, isCurrentMonth = true))
         }
 
-        // Trailing days to fill 35 or 42 grid items
         val totalCells = if (days.size > 35) 42 else 35
         val nextCal = (cal.clone() as Calendar).apply { add(Calendar.MONTH, 1) }
         var nextDayNum = 1
@@ -120,7 +118,6 @@ fun MonthCalendarView(
         days
     }
 
-    // Map of dates to indicator dot counts/types
     val eventsByDate = remember(events) { events.groupBy { it.date } }
     val notesByDate = remember(notes) { notes.filter { it.date != null }.groupBy { it.date!! } }
 
@@ -140,14 +137,15 @@ fun MonthCalendarView(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Text(
-                        text = "${monthNames[currentMonth.month]} ${currentMonth.year}",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                }
+                Text(
+                    text = "${monthNames[currentMonth.month]} ${currentMonth.year}",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    softWrap = false
+                )
 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     TextButton(
@@ -158,7 +156,9 @@ fun MonthCalendarView(
                             text = "Сегодня",
                             color = SigeonPrimary,
                             fontWeight = FontWeight.SemiBold,
-                            fontSize = 13.sp
+                            fontSize = 13.sp,
+                            maxLines = 1,
+                            softWrap = false
                         )
                     }
 
@@ -201,7 +201,9 @@ fun MonthCalendarView(
                         fontWeight = FontWeight.SemiBold,
                         color = if (isWeekend) Color(0xFFF43F5E) else MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center,
-                        modifier = Modifier.width(36.dp)
+                        modifier = Modifier.width(36.dp),
+                        maxLines = 1,
+                        softWrap = false
                     )
                 }
             }
@@ -287,7 +289,9 @@ fun CalendarDayCell(
                 fontSize = 13.sp,
                 fontWeight = if (isSelected || isToday) FontWeight.Bold else FontWeight.Medium,
                 color = textColor,
-                textAlign = TextAlign.Center
+                textAlign = TextAlign.Center,
+                maxLines = 1,
+                softWrap = false
             )
 
             // Activity indicators dots

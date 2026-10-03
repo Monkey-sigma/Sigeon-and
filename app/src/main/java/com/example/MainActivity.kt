@@ -2,6 +2,7 @@ package com.example
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedContent
@@ -79,6 +80,11 @@ fun SigeonApp(viewModel: MainViewModel = viewModel()) {
     val collegeClasses by viewModel.collegeSchedule.collectAsState()
     val allNotes by viewModel.allNotes.collectAsState()
 
+    // Handle system back navigation to return to College schedule tab
+    BackHandler(enabled = currentDestination != NavDestination.COLLEGE) {
+        currentDestination = NavDestination.COLLEGE
+    }
+
     // Show status messages / feedback toasts
     LaunchedEffect(statusMessage) {
         statusMessage?.let {
@@ -135,7 +141,10 @@ fun SigeonApp(viewModel: MainViewModel = viewModel()) {
                         Text(
                             text = "Офлайн-режим • Расписание и заметки доступны локально",
                             color = Color.White,
-                            fontSize = 12.sp
+                            fontSize = 12.sp,
+                            maxLines = 1,
+                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+                            softWrap = false
                         )
                     }
                 }

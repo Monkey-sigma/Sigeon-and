@@ -1,6 +1,5 @@
 package com.example.ui.college
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -40,6 +39,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.api.CollegeProfile
@@ -47,17 +47,33 @@ import com.example.ui.theme.SigeonPrimary
 
 @Composable
 fun CollegeApiConfigDialog(
-    currentProfile: CollegeProfile,
-    allProfiles: List<CollegeProfile>,
+    currentProfile: CollegeProfile = CollegeProfile(
+        id = "custom",
+        collegeName = "Пользовательский",
+        groupName = "",
+        apiUrl = "",
+        description = ""
+    ),
+    allProfiles: List<CollegeProfile> = emptyList(),
     currentApiUrl: String,
     currentGroupName: String,
+    profiles: List<CollegeProfile> = allProfiles,
     onDismiss: () -> Unit,
-    onConfirm: (profile: CollegeProfile, apiUrl: String, groupName: String) -> Unit
+    onSave: (apiUrl: String, groupName: String) -> Unit = { _, _ -> },
+    onSelectProfile: (CollegeProfile) -> Unit = {},
+    onConfirm: (profile: CollegeProfile, apiUrl: String, groupName: String) -> Unit = { p, u, g -> }
 ) {
-    var selectedProfile by remember { mutableStateOf(currentProfile) }
+    val profilesList = if (allProfiles.isNotEmpty()) allProfiles else profiles
+    var selectedProfile by remember {
+        mutableStateOf(profilesList.firstOrNull { it.id == currentProfile.id } ?: profilesList.firstOrNull() ?: currentProfile)
+    }
     var apiUrl by remember { mutableStateOf(currentApiUrl) }
     var groupName by remember { mutableStateOf(currentGroupName) }
-    var planovoGroupIdInput by remember { mutableStateOf(if (currentApiUrl.contains("/groups/")) currentApiUrl.substringAfter("/groups/").substringBefore("/") else "41") }
+    var planovoGroupIdInput by remember {
+        mutableStateOf(
+            if (currentApiUrl.contains("/groups/")) currentApiUrl.substringAfter("/groups/").substringBefore("/") else "41"
+        )
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -74,7 +90,10 @@ fun CollegeApiConfigDialog(
                 Text(
                     text = "Синхронизация Planovo & API",
                     fontWeight = FontWeight.Bold,
-                    fontSize = 19.sp
+                    fontSize = 18.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    softWrap = false
                 )
             }
         },
@@ -86,13 +105,15 @@ fun CollegeApiConfigDialog(
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 Text(
-                    text = "Выберите учебное заведение или укажите прямую ссылку на Planovo (.ics) / REST API:",
+                    text = "Выберите учебное заведение или укажите ссылку на Planovo (.ics) / API:",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
                 )
 
                 // Profiles list (Planovo, КИТ, etc.)
-                allProfiles.forEach { profile ->
+                profilesList.forEach { profile ->
                     val isSelected = selectedProfile.id == profile.id
                     val isPlanovo = profile.apiUrl.contains("planovo.pro")
                     Surface(
@@ -135,7 +156,9 @@ fun CollegeApiConfigDialog(
                                         text = profile.collegeName,
                                         fontWeight = FontWeight.Bold,
                                         fontSize = 14.sp,
-                                        color = MaterialTheme.colorScheme.onSurface
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        softWrap = false
                                     )
                                     if (isPlanovo) {
                                         Spacer(modifier = Modifier.size(6.dp))
@@ -148,6 +171,8 @@ fun CollegeApiConfigDialog(
                                                 fontSize = 9.sp,
                                                 fontWeight = FontWeight.Bold,
                                                 color = Color(0xFF10B981),
+                                                maxLines = 1,
+                                                softWrap = false,
                                                 modifier = Modifier.padding(horizontal = 4.dp, vertical = 1.dp)
                                             )
                                         }
@@ -158,13 +183,17 @@ fun CollegeApiConfigDialog(
                                     text = "Группа: ${profile.groupName}",
                                     fontSize = 12.sp,
                                     color = SigeonPrimary,
-                                    fontWeight = FontWeight.SemiBold
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 1,
+                                    softWrap = false
                                 )
                                 Text(
                                     text = profile.description,
                                     fontSize = 11.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                                    maxLines = 2
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
                                 )
                             }
                         }
@@ -183,7 +212,9 @@ fun CollegeApiConfigDialog(
                         Text(
                             text = "Быстрая настройка Planovo по ID группы:",
                             fontSize = 12.sp,
-                            fontWeight = FontWeight.SemiBold
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            softWrap = false
                         )
                         Spacer(modifier = Modifier.height(6.dp))
                         Row(
@@ -198,10 +229,11 @@ fun CollegeApiConfigDialog(
                                         apiUrl = "https://planovo.pro/api/v1/public/groups/${it.trim()}/calendar.ics"
                                     }
                                 },
-                                label = { Text("ID группы Planovo (например: 41)") },
+                                label = { Text("ID группы Planovo (число)", maxLines = 1, softWrap = false) },
                                 modifier = Modifier.weight(1f),
                                 shape = RoundedCornerShape(8.dp),
-                                singleLine = true
+                                singleLine = true,
+                                maxLines = 1
                             )
                         }
                     }
@@ -212,38 +244,43 @@ fun CollegeApiConfigDialog(
                     text = "Параметры ссылки и группы:",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    softWrap = false
                 )
 
                 OutlinedTextField(
                     value = groupName,
                     onValueChange = { groupName = it },
-                    label = { Text("Название группы") },
+                    label = { Text("Название группы", maxLines = 1, softWrap = false) },
                     modifier = Modifier.fillMaxWidth().testTag("api_group_input"),
                     shape = RoundedCornerShape(12.dp),
-                    singleLine = true
+                    singleLine = true,
+                    maxLines = 1
                 )
 
                 OutlinedTextField(
                     value = apiUrl,
                     onValueChange = { apiUrl = it },
-                    label = { Text("URL расписания (Planovo .ics или JSON)") },
+                    label = { Text("URL расписания (Planovo .ics или JSON)", maxLines = 1, softWrap = false) },
                     leadingIcon = {
                         Icon(Icons.Default.Link, contentDescription = null, tint = SigeonPrimary)
                     },
                     supportingText = {
-                        Text("Поддерживаются: Planovo calendar.ics, 1C:Колледж, Modeus, RUZ, OpenSchedule")
+                        Text("Поддерживаются: Planovo calendar.ics, 1C:Колледж, Modeus", maxLines = 1, overflow = TextOverflow.Ellipsis, softWrap = false)
                     },
                     modifier = Modifier.fillMaxWidth().testTag("api_url_input"),
                     shape = RoundedCornerShape(12.dp),
-                    minLines = 2,
-                    maxLines = 3
+                    singleLine = true,
+                    maxLines = 1
                 )
             }
         },
         confirmButton = {
             Button(
                 onClick = {
+                    onSave(apiUrl.trim(), groupName.trim())
+                    onSelectProfile(selectedProfile)
                     onConfirm(selectedProfile, apiUrl.trim(), groupName.trim())
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = SigeonPrimary),
@@ -252,12 +289,12 @@ fun CollegeApiConfigDialog(
             ) {
                 Icon(Icons.Default.CloudSync, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.size(6.dp))
-                Text("Синхронизировать")
+                Text("Синхронизировать", maxLines = 1, softWrap = false)
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Отмена")
+                Text("Отмена", maxLines = 1, softWrap = false)
             }
         },
         shape = RoundedCornerShape(20.dp)

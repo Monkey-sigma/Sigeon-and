@@ -10,19 +10,18 @@ import android.widget.RemoteViews
 import com.example.MainActivity
 import com.example.R
 import com.example.data.local.AppDatabase
-import com.example.data.local.EventEntity
+import com.example.util.ImageStorageHelper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
-import java.util.Calendar
 import java.util.Date
 import java.util.Locale
 
 object WidgetUpdateHelper {
 
     private val dateFormat = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-    private val dateDisplayFormat = SimpleDateFormat("EEE, d MMM", Locale("ru"))
+    private val dateDisplayFormat = SimpleDateFormat("EEE, d MMM", Locale.forLanguageTag("ru"))
     private val timeFormat = SimpleDateFormat("HH:mm", Locale.getDefault())
 
     suspend fun updateWidget(context: Context, appWidgetManager: AppWidgetManager, appWidgetId: Int) {
@@ -30,7 +29,30 @@ object WidgetUpdateHelper {
         val todayStr = dateFormat.format(Date())
         val dateDisplayText = dateDisplayFormat.format(Date()).replaceFirstChar { it.uppercase() }
 
-        // Click to open main app
+        val prefs = context.getSharedPreferences("sigeon_prefs", Context.MODE_PRIVATE)
+        val groupName = prefs.getString("selected_group_name", "ои31-09/24") ?: "ои31-09/24"
+        val collegeName = prefs.getString("selected_college_name", "Planovo") ?: "Planovo"
+        val coverImageUri = prefs.getString("cover_image_uri", null)
+
+        // Custom Wallpaper / Background in Widget if set
+        if (!coverImageUri.isNullOrBlank()) {
+            val bitmap = withContext(Dispatchers.IO) {
+                ImageStorageHelper.loadScaledBitmap(coverImageUri, maxDim = 600)
+            }
+            if (bitmap != null) {
+                views.setViewVisibility(R.id.widget_bg_image, View.VISIBLE)
+                views.setImageViewBitmap(R.id.widget_bg_image, bitmap)
+                views.setViewVisibility(R.id.widget_scrim_overlay, View.VISIBLE)
+            } else {
+                views.setViewVisibility(R.id.widget_bg_image, View.GONE)
+                views.setViewVisibility(R.id.widget_scrim_overlay, View.GONE)
+            }
+        } else {
+            views.setViewVisibility(R.id.widget_bg_image, View.GONE)
+            views.setViewVisibility(R.id.widget_scrim_overlay, View.GONE)
+        }
+
+        // Click to open main app (College schedule tab)
         val openAppIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP
         }
@@ -41,6 +63,9 @@ object WidgetUpdateHelper {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
         views.setOnClickPendingIntent(R.id.widget_root, openAppPendingIntent)
+        views.setOnClickPendingIntent(R.id.widget_header_clickable, openAppPendingIntent)
+        views.setOnClickPendingIntent(R.id.widget_active_card, openAppPendingIntent)
+        views.setOnClickPendingIntent(R.id.widget_empty_view, openAppPendingIntent)
 
         // Click to refresh widget
         val refreshIntent = Intent(context, CollegeScheduleWidgetProvider::class.java).apply {
@@ -54,6 +79,8 @@ object WidgetUpdateHelper {
         )
         views.setOnClickPendingIntent(R.id.widget_refresh_btn, refreshPendingIntent)
 
+        views.setTextViewText(R.id.widget_title, "SIGEON • $collegeName")
+        views.setTextViewText(R.id.widget_subtitle, "Группа $groupName")
         views.setTextViewText(R.id.widget_date, dateDisplayText)
 
         // Query database on background thread
@@ -66,7 +93,7 @@ object WidgetUpdateHelper {
             }
 
             if (todayClasses.isEmpty()) {
-                // Empty state
+                // Empty state (no classes scheduled)
                 views.setViewVisibility(R.id.widget_active_card, View.GONE)
                 views.setViewVisibility(R.id.widget_next_pair_hint, View.GONE)
                 views.setViewVisibility(R.id.widget_empty_view, View.VISIBLE)
@@ -104,15 +131,17 @@ object WidgetUpdateHelper {
                     views.setViewVisibility(R.id.widget_active_card, View.GONE)
                     views.setViewVisibility(R.id.widget_next_pair_hint, View.GONE)
                     views.setViewVisibility(R.id.widget_empty_view, View.VISIBLE)
-                    views.setTextViewText(R.id.widget_empty_title, "Все пары на сегодня завершены! 🎓")
-                    views.setTextViewText(R.id.widget_empty_subtitle, "Отличная работа! Открыть календарь")
+                    views.setTextViewText(R.id.widget_empty_title, "Все пары завершены! 🎓")
+                    views.setTextViewText(R.id.widget_empty_subtitle, "Отличный день! Открыть SIGEON")
                 } else {
                     val mainLesson = todayClasses[activeIndex]
                     views.setTextViewText(R.id.widget_status_badge, statusText)
                     views.setTextViewText(R.id.widget_pair_time, "${mainLesson.startTime} – ${mainLesson.endTime}")
+                    
+                    val subjectName = mainLesson.collegeSubject.ifBlank { mainLesson.title }
                     views.setTextViewText(
                         R.id.widget_subject,
-                        "№${mainLesson.collegePairNumber}. ${mainLesson.collegeSubject.ifBlank { mainLesson.title }}"
+                        "№${mainLesson.collegePairNumber}. $subjectName"
                     )
 
                     val details = buildString {
@@ -120,15 +149,16 @@ object WidgetUpdateHelper {
                         if (mainLesson.collegeTeacher.isNotBlank()) append("👨‍🏫 ${mainLesson.collegeTeacher}  ")
                         if (mainLesson.collegeLessonType.isNotBlank()) append("(${mainLesson.collegeLessonType})")
                     }
-                    views.setTextViewText(R.id.widget_details, details)
+                    views.setTextViewText(R.id.widget_details, details.ifBlank { "Пара колледжа" })
 
                     // Secondary preview: next pair if exists
                     if (activeIndex + 1 < todayClasses.size) {
                         val nextLesson = todayClasses[activeIndex + 1]
+                        val nextSub = nextLesson.collegeSubject.ifBlank { nextLesson.title }
                         views.setViewVisibility(R.id.widget_next_pair_hint, View.VISIBLE)
                         views.setTextViewText(
                             R.id.widget_next_pair_hint,
-                            "Далее: №${nextLesson.collegePairNumber} • ${nextLesson.collegeSubject} (${nextLesson.startTime})"
+                            "Далее: №${nextLesson.collegePairNumber} • $nextSub (${nextLesson.startTime})"
                         )
                     } else {
                         views.setViewVisibility(R.id.widget_next_pair_hint, View.VISIBLE)
@@ -156,11 +186,15 @@ object WidgetUpdateHelper {
     }
 
     suspend fun updateAllWidgets(context: Context) {
-        val appWidgetManager = AppWidgetManager.getInstance(context)
-        val componentName = ComponentName(context, CollegeScheduleWidgetProvider::class.java)
-        val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
-        for (id in appWidgetIds) {
-            updateWidget(context, appWidgetManager, id)
+        try {
+            val appWidgetManager = AppWidgetManager.getInstance(context)
+            val componentName = ComponentName(context, CollegeScheduleWidgetProvider::class.java)
+            val appWidgetIds = appWidgetManager.getAppWidgetIds(componentName)
+            for (id in appWidgetIds) {
+                updateWidget(context, appWidgetManager, id)
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 }

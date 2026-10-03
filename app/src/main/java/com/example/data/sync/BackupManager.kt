@@ -36,6 +36,7 @@ class BackupManager(private val dao: CalendarDao) {
                 put("collegePairNumber", e.collegePairNumber)
                 put("colorHex", e.colorHex)
                 put("isCompleted", e.isCompleted)
+                put("imageUri", e.imageUri ?: JSONObject.NULL)
             }
             eventsArray.put(obj)
         }
@@ -53,6 +54,7 @@ class BackupManager(private val dao: CalendarDao) {
                 put("colorHex", n.colorHex)
                 put("isPinned", n.isPinned)
                 put("checklistJson", n.checklistJson)
+                put("imageUri", n.imageUri ?: JSONObject.NULL)
             }
             notesArray.put(obj)
         }
@@ -89,7 +91,8 @@ class BackupManager(private val dao: CalendarDao) {
                             collegeLessonType = obj.optString("collegeLessonType", ""),
                             collegePairNumber = obj.optInt("collegePairNumber", 0),
                             colorHex = obj.optString("colorHex", "#6366F1"),
-                            isCompleted = obj.optBoolean("isCompleted", false)
+                            isCompleted = obj.optBoolean("isCompleted", false),
+                            imageUri = if (obj.isNull("imageUri")) null else obj.getString("imageUri")
                         )
                     )
                 }
@@ -106,11 +109,12 @@ class BackupManager(private val dao: CalendarDao) {
                     val note = NoteEntity(
                         title = obj.optString("title", ""),
                         content = obj.optString("content", ""),
-                        date = if (obj.isNull("date")) null else obj.optString("date", null),
+                        date = if (obj.isNull("date")) null else obj.getString("date"),
                         tag = obj.optString("tag", "Учеба"),
                         colorHex = obj.optString("colorHex", "#6366F1"),
                         isPinned = obj.optBoolean("isPinned", false),
-                        checklistJson = obj.optString("checklistJson", "")
+                        checklistJson = obj.optString("checklistJson", ""),
+                        imageUri = if (obj.isNull("imageUri")) null else obj.getString("imageUri")
                     )
                     dao.insertNote(note)
                     importedNotesCount++
