@@ -1,5 +1,6 @@
 package com.example.ui.college
 
+import android.Manifest
 import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
@@ -37,6 +38,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.CloudSync
@@ -118,6 +121,18 @@ data class GroupedCollegePair(
     val lessons: List<EventEntity>
 )
 
+sealed class ScheduleTimelineItem {
+    abstract val startTime: String
+
+    data class CollegePairItem(val groupedPair: GroupedCollegePair) : ScheduleTimelineItem() {
+        override val startTime: String get() = groupedPair.startTime
+    }
+
+    data class GoogleEventOverlayItem(val event: EventEntity) : ScheduleTimelineItem() {
+        override val startTime: String get() = event.startTime
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CollegeScheduleScreen(
@@ -128,6 +143,9 @@ fun CollegeScheduleScreen(
     val coroutineScope = rememberCoroutineScope()
 
     val collegeClasses by viewModel.collegeSchedule.collectAsState()
+    val allEvents by viewModel.allEvents.collectAsState()
+    val isGoogleOverlayEnabled by viewModel.isGoogleOverlayEnabled.collectAsState()
+    val hasCalendarPermission by viewModel.hasCalendarPermission.collectAsState()
     val isSyncing by viewModel.isSyncing.collectAsState()
     val isOnline by viewModel.isOnline.collectAsState()
     val selectedProfile by viewModel.selectedProfile.collectAsState()
@@ -138,10 +156,21 @@ fun CollegeScheduleScreen(
 
     var showConfigDialog by remember { mutableStateOf(false) }
     var showGroupSelectorSheet by remember { mutableStateOf(false) }
+    var showAnalyticsDashboard by remember { mutableStateOf(false) }
     var editingClassEvent by remember { mutableStateOf<EventEntity?>(null) }
-    var noteDialogClassDate by remember { mutableStateOf<String?>(null) }
-    var noteDialogSubject by remember { mutableStateOf("") }
+    var noteDialogTargetLesson by remember { mutableStateOf<EventEntity?>(null) }
     var fullscreenImageUri by remember { mutableStateOf<String?>(null) }
+
+    // Calendar permissions launcher
+    val calendarPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestMultiplePermissions()
+    ) { perms ->
+        val granted = perms[Manifest.permission.READ_CALENDAR] == true
+        viewModel.checkPermissionsAndLoadCalendars()
+        if (granted) {
+            viewModel.toggleGoogleOverlay(true)
+        }
+    }
 
     // Cover image picker
     val coverPickerLauncher = rememberLauncherForActivityResult(
@@ -226,6 +255,22 @@ fun CollegeScheduleScreen(
         }
     }
 
+    // Google Calendar Overlay Events for Selected Day
+    val googleEventsForSelectedDay = remember(allEvents, currentTabDate, isGoogleOverlayEnabled) {
+        if (!isGoogleOverlayEnabled) emptyList()
+        else allEvents.filter { it.date == currentTabDate && (it.type == "GOOGLE" || it.type == "EVENT") }
+    }
+
+    // Merged Schedule Timeline Items (College pairs + Google Calendar overlay items sorted by time)
+    val scheduleTimelineItems = remember(groupedClassesForSelectedDay, googleEventsForSelectedDay, isGoogleOverlayEnabled) {
+        val items = mutableListOf<ScheduleTimelineItem>()
+        groupedClassesForSelectedDay.forEach { items.add(ScheduleTimelineItem.CollegePairItem(it)) }
+        if (isGoogleOverlayEnabled) {
+            googleEventsForSelectedDay.forEach { items.add(ScheduleTimelineItem.GoogleEventOverlayItem(it)) }
+        }
+        items.sortedBy { it.startTime }
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
@@ -296,6 +341,17 @@ fun CollegeScheduleScreen(
                     }
                 },
                 actions = {
+                    IconButton(
+                        onClick = { showAnalyticsDashboard = true },
+                        modifier = Modifier.testTag("weekly_analytics_button")
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.BarChart,
+                            contentDescription = "Аналитика недели",
+                            tint = SigeonPrimary
+                        )
+                    }
+
                     IconButton(
                         onClick = { showConfigDialog = true },
                         modifier = Modifier.testTag("college_api_config_button")
@@ -458,7 +514,7 @@ fun CollegeScheduleScreen(
                         }
                     }
 
-                    // Schedule Status Sub-bar
+                    // Schedule Status Sub-bar with Google Overlay Sync Control
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -483,29 +539,74 @@ fun CollegeScheduleScreen(
                             )
                         }
 
-                        Surface(
-                            shape = RoundedCornerShape(8.dp),
-                            color = Color(0xFF4285F4).copy(alpha = 0.12f),
-                            modifier = Modifier.clickable { viewModel.exportCollegeScheduleToGoogle() }
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
-                                verticalAlignment = Alignment.CenterVertically
+                            // Google Overlay Toggle Chip
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = if (isGoogleOverlayEnabled) Color(0xFF4285F4).copy(alpha = 0.18f) else MaterialTheme.colorScheme.surfaceVariant,
+                                modifier = Modifier.clickable {
+                                    if (!hasCalendarPermission) {
+                                        calendarPermissionLauncher.launch(
+                                            arrayOf(
+                                                Manifest.permission.READ_CALENDAR,
+                                                Manifest.permission.WRITE_CALENDAR
+                                            )
+                                        )
+                                    } else {
+                                        viewModel.toggleGoogleOverlay(!isGoogleOverlayEnabled)
+                                    }
+                                }
                             ) {
-                                Icon(
-                                    imageVector = Icons.Default.Sync,
-                                    contentDescription = null,
-                                    tint = Color(0xFF4285F4),
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Spacer(modifier = Modifier.width(6.dp))
-                                Text(
-                                    text = "В Google Календарь",
-                                    fontSize = 11.sp,
-                                    color = Color(0xFF4285F4),
-                                    maxLines = 1,
-                                    softWrap = false
-                                )
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.CalendarToday,
+                                        contentDescription = null,
+                                        tint = if (isGoogleOverlayEnabled) Color(0xFF4285F4) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        modifier = Modifier.size(12.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = if (isGoogleOverlayEnabled) "Оверлей Google" else "Вкл. Google",
+                                        fontSize = 11.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = if (isGoogleOverlayEnabled) Color(0xFF4285F4) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
+                            }
+
+                            // Sync to Google button
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = Color(0xFF4285F4).copy(alpha = 0.12f),
+                                modifier = Modifier.clickable { viewModel.exportCollegeScheduleToGoogle() }
+                            ) {
+                                Row(
+                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 3.dp),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Sync,
+                                        contentDescription = null,
+                                        tint = Color(0xFF4285F4),
+                                        modifier = Modifier.size(13.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(
+                                        text = "Экспорт",
+                                        fontSize = 11.sp,
+                                        color = Color(0xFF4285F4),
+                                        maxLines = 1,
+                                        softWrap = false
+                                    )
+                                }
                             }
                         }
                     }
@@ -570,7 +671,7 @@ fun CollegeScheduleScreen(
                         )
                         Spacer(modifier = Modifier.width(8.dp))
                         Text(
-                            text = "Синхронизация расписания Planovo...",
+                            text = "Синхронизация расписания Planovo & Google Календаря...",
                             fontSize = 11.sp,
                             color = SigeonPrimary,
                             fontWeight = FontWeight.Medium,
@@ -581,7 +682,7 @@ fun CollegeScheduleScreen(
                 }
             }
 
-            // Schedule List for Selected Day
+            // Schedule Timeline List for Selected Day
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -589,7 +690,7 @@ fun CollegeScheduleScreen(
                 contentPadding = PaddingValues(horizontal = 16.dp, vertical = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                if (groupedClassesForSelectedDay.isEmpty()) {
+                if (scheduleTimelineItems.isEmpty()) {
                     item {
                         Surface(
                             modifier = Modifier
@@ -610,7 +711,7 @@ fun CollegeScheduleScreen(
                                 )
                                 Spacer(modifier = Modifier.height(12.dp))
                                 Text(
-                                    text = "Пар на этот день нет 🎉",
+                                    text = "Пар и событий на этот день нет 🎉",
                                     style = MaterialTheme.typography.titleMedium,
                                     fontWeight = FontWeight.Bold,
                                     maxLines = 1,
@@ -618,7 +719,7 @@ fun CollegeScheduleScreen(
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
                                 Text(
-                                    text = "Отдыхайте или выберите другой день недели",
+                                    text = "Отдыхайте или включите оверлей Google Календаря",
                                     fontSize = 12.sp,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                                     maxLines = 1,
@@ -630,22 +731,41 @@ fun CollegeScheduleScreen(
                     }
                 } else {
                     items(
-                        items = groupedClassesForSelectedDay,
-                        key = { "${it.pairNumber}_${it.startTime}_${it.lessons.firstOrNull()?.id ?: 0}" }
-                    ) { groupedPair ->
-                        EnhancedGroupedCollegeClassCard(
-                            groupedPair = groupedPair,
-                            onEditClick = { lesson -> editingClassEvent = lesson },
-                            onImageClick = { imgUri -> fullscreenImageUri = imgUri },
-                            onAddNoteClick = { lesson ->
-                                noteDialogClassDate = lesson.date
-                                noteDialogSubject = lesson.collegeSubject.ifBlank { lesson.title }
+                        items = scheduleTimelineItems,
+                        key = { item ->
+                            when (item) {
+                                is ScheduleTimelineItem.CollegePairItem -> "pair_${item.groupedPair.pairNumber}_${item.groupedPair.startTime}_${item.groupedPair.lessons.firstOrNull()?.id ?: 0}"
+                                is ScheduleTimelineItem.GoogleEventOverlayItem -> "google_${item.event.id}_${item.event.googleEventId ?: 0}"
                             }
-                        )
+                        }
+                    ) { item ->
+                        when (item) {
+                            is ScheduleTimelineItem.CollegePairItem -> {
+                                EnhancedGroupedCollegeClassCard(
+                                    groupedPair = item.groupedPair,
+                                    onEditClick = { lesson -> editingClassEvent = lesson },
+                                    onImageClick = { imgUri -> fullscreenImageUri = imgUri },
+                                    onAddNoteClick = { lesson -> noteDialogTargetLesson = lesson }
+                                )
+                            }
+                            is ScheduleTimelineItem.GoogleEventOverlayItem -> {
+                                GoogleCalendarOverlayCard(
+                                    event = item.event
+                                )
+                            }
+                        }
                     }
                 }
             }
         }
+    }
+
+    // Weekly Academic Analytics Dashboard Dialog
+    if (showAnalyticsDashboard) {
+        WeeklyAcademicDashboardDialog(
+            allEvents = collegeClasses,
+            onDismiss = { showAnalyticsDashboard = false }
+        )
     }
 
     // Group Selector Bottom Sheet
@@ -698,26 +818,28 @@ fun CollegeScheduleScreen(
     }
 
     // Add Note for Class Dialog
-    noteDialogClassDate?.let { date ->
+    noteDialogTargetLesson?.let { lesson ->
         AddEditNoteDialog(
-            initialDate = date,
-            onDismiss = {
-                noteDialogClassDate = null
-                noteDialogSubject = ""
-            },
-            onConfirm = { title, content, noteDate, tag, color, isPinned, items, imageUri ->
+            initialDate = lesson.date,
+            initialClassSlotId = lesson.id,
+            initialPairNumber = lesson.collegePairNumber,
+            initialSubject = lesson.collegeSubject.ifBlank { lesson.title },
+            onDismiss = { noteDialogTargetLesson = null },
+            onConfirm = { title, content, noteDate, tag, color, isPinned, items, imageUri, slotId, pairNum, subj ->
                 viewModel.addNote(
-                    title = if (title.isNotBlank()) title else "Заметка: $noteDialogSubject",
+                    title = title,
                     content = content,
                     date = noteDate,
                     tag = tag,
                     colorHex = color,
                     isPinned = isPinned,
                     checklistItems = items,
-                    imageUri = imageUri
+                    imageUri = imageUri,
+                    classSlotId = slotId,
+                    collegePairNumber = pairNum,
+                    collegeSubject = subj
                 )
-                noteDialogClassDate = null
-                noteDialogSubject = ""
+                noteDialogTargetLesson = null
             }
         )
     }
@@ -762,6 +884,122 @@ fun CollegeScheduleScreen(
                             )
                         }
                     }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun GoogleCalendarOverlayCard(
+    event: EventEntity,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .bounceClick(scaleDown = 0.98f) { },
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = Color(0xFF4285F4).copy(alpha = 0.08f)
+        ),
+        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Surface(
+                        shape = CircleShape,
+                        color = Color(0xFF4285F4),
+                        modifier = Modifier.size(24.dp)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Default.CalendarToday,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(13.dp)
+                            )
+                        }
+                    }
+
+                    Text(
+                        text = if (event.startTime.isNotBlank()) "${event.startTime} – ${event.endTime.ifBlank { "—" }}" else "Весь день",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1D4ED8),
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+
+                Surface(
+                    shape = RoundedCornerShape(8.dp),
+                    color = Color(0xFF4285F4).copy(alpha = 0.18f)
+                ) {
+                    Text(
+                        text = "Google Календарь",
+                        fontSize = 10.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF1D4ED8),
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp),
+                        maxLines = 1,
+                        softWrap = false
+                    )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(6.dp))
+
+            Text(
+                text = event.title,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                softWrap = false
+            )
+
+            if (event.description.isNotBlank()) {
+                Spacer(modifier = Modifier.height(3.dp))
+                Text(
+                    text = event.description,
+                    fontSize = 12.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    softWrap = false
+                )
+            }
+
+            if (event.location.isNotBlank()) {
+                Spacer(modifier = Modifier.height(4.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.LocationOn,
+                        contentDescription = null,
+                        tint = Color(0xFF4285F4),
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Spacer(modifier = Modifier.width(3.dp))
+                    Text(
+                        text = event.location,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = Color(0xFF4285F4),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        softWrap = false
+                    )
                 }
             }
         }

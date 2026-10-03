@@ -57,6 +57,12 @@ interface CalendarDao {
     @Query("SELECT * FROM notes WHERE date = :date ORDER BY isPinned DESC, updatedAt DESC")
     fun getNotesByDate(date: String): Flow<List<NoteEntity>>
 
+    @Query("SELECT * FROM notes WHERE classSlotId = :classSlotId ORDER BY updatedAt DESC")
+    fun getNotesForClassSlot(classSlotId: Long): Flow<List<NoteEntity>>
+
+    @Query("SELECT * FROM notes WHERE date = :date AND collegePairNumber = :pairNumber ORDER BY updatedAt DESC")
+    fun getNotesByDateAndPair(date: String, pairNumber: Int): Flow<List<NoteEntity>>
+
     @Query("SELECT * FROM notes WHERE id = :id")
     suspend fun getNoteById(id: Long): NoteEntity?
 

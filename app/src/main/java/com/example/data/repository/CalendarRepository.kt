@@ -39,6 +39,10 @@ class CalendarRepository(
 
     fun getNotesByDate(date: String): Flow<List<NoteEntity>> = calendarDao.getNotesByDate(date)
 
+    fun getNotesForClassSlot(classSlotId: Long): Flow<List<NoteEntity>> = calendarDao.getNotesForClassSlot(classSlotId)
+
+    fun getNotesByDateAndPair(date: String, pairNumber: Int): Flow<List<NoteEntity>> = calendarDao.getNotesByDateAndPair(date, pairNumber)
+
     suspend fun addNote(note: NoteEntity): Long = calendarDao.insertNote(note)
 
     suspend fun updateNote(note: NoteEntity) = calendarDao.updateNote(note)

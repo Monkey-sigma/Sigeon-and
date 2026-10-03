@@ -17,7 +17,9 @@ data class ChecklistItem(
     indices = [
         Index(value = ["date"]),
         Index(value = ["tag"]),
-        Index(value = ["isPinned"])
+        Index(value = ["isPinned"]),
+        Index(value = ["classSlotId"]),
+        Index(value = ["collegePairNumber"])
     ]
 )
 data class NoteEntity(
@@ -31,6 +33,9 @@ data class NoteEntity(
     val isPinned: Boolean = false,
     val checklistJson: String = "", // Serialized ChecklistItem list
     val imageUri: String? = null, // Local path or URI to attached user image
+    val classSlotId: Long? = null, // Associated class slot / EventEntity ID
+    val collegePairNumber: Int = 0, // Associated pair number (1, 2, 3...)
+    val collegeSubject: String = "", // Associated college subject name
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis()
 ) {

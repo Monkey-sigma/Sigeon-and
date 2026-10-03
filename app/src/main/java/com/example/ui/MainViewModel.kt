@@ -20,6 +20,7 @@ import com.example.data.repository.CalendarRepository
 import com.example.data.sync.ConnectivityObserver
 import com.example.data.sync.DeviceCalendar
 import com.example.data.sync.GoogleCalendarSyncManager
+import com.example.util.ClassNotificationScheduler
 import com.example.util.ImageStorageHelper
 import com.example.widget.CollegeScheduleWidgetProvider
 import com.example.widget.WidgetUpdateHelper
@@ -96,6 +97,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     // Exported backup JSON state for offline sharing/exporting
     private val _backupJsonExported = MutableStateFlow<String?>(null)
     val backupJsonExported: StateFlow<String?> = _backupJsonExported.asStateFlow()
+
+    // Google Calendar Overlay Toggle
+    private val _isGoogleOverlayEnabled = MutableStateFlow(
+        prefs.getBoolean("google_overlay_enabled", true)
+    )
+    val isGoogleOverlayEnabled: StateFlow<Boolean> = _isGoogleOverlayEnabled.asStateFlow()
+
+    fun toggleGoogleOverlay(enabled: Boolean) {
+        _isGoogleOverlayEnabled.value = enabled
+        prefs.edit().putBoolean("google_overlay_enabled", enabled).apply()
+        _statusMessage.value = if (enabled) "Оверлей Google Календаря включен" else "Оверлей Google Календаря выключен"
+        if (enabled && _hasCalendarPermission.value) {
+            importFromGoogleCalendar()
+        }
+    }
 
     // Available calendars & permissions
     private val _hasCalendarPermission = MutableStateFlow(syncManager.hasCalendarPermissions())
@@ -348,7 +364,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         colorHex: String,
         isPinned: Boolean = false,
         checklistItems: List<ChecklistItem> = emptyList(),
-        imageUri: String? = null
+        imageUri: String? = null,
+        classSlotId: Long? = null,
+        collegePairNumber: Int = 0,
+        collegeSubject: String = ""
     ) {
         viewModelScope.launch {
             val note = NoteEntity(
@@ -359,10 +378,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 colorHex = colorHex,
                 isPinned = isPinned,
                 checklistJson = NoteEntity.serializeChecklist(checklistItems),
-                imageUri = imageUri
+                imageUri = imageUri,
+                classSlotId = classSlotId,
+                collegePairNumber = collegePairNumber,
+                collegeSubject = collegeSubject
             )
             repository.addNote(note)
-            _statusMessage.value = "Заметка сохранена"
+            _statusMessage.value = "Заметка к паре сохранена"
         }
     }
 
@@ -393,6 +415,31 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    // Notification state for 15-minute advance class alerts
+    val isClassNotificationsEnabled = MutableStateFlow(
+        ClassNotificationScheduler.isNotificationEnabled(getApplication())
+    )
+
+    fun toggleClassNotifications(enabled: Boolean) {
+        ClassNotificationScheduler.setNotificationEnabled(getApplication(), enabled)
+        isClassNotificationsEnabled.value = enabled
+        viewModelScope.launch {
+            val lessons = repository.getCollegeSchedule().first()
+            if (enabled) {
+                ClassNotificationScheduler.scheduleAllUpcomingClassAlerts(getApplication(), lessons)
+                _statusMessage.value = "Уведомления за 15 минут до пар включены"
+            } else {
+                ClassNotificationScheduler.cancelAllClassAlerts(getApplication(), lessons)
+                _statusMessage.value = "Уведомления отключены"
+            }
+        }
+    }
+
+    fun sendTestClassNotification() {
+        ClassNotificationScheduler.sendTestNotification(getApplication())
+        _statusMessage.value = "Тестовое уведомление отправлено"
+    }
+
     // College API Sync
     fun syncCollegeScheduleFromApi(
         apiUrl: String = _apiUrlInput.value,
@@ -408,6 +455,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val count = result.getOrNull() ?: 0
                 _statusMessage.value = "Расписание колледжа готово ($count пар)"
                 WidgetUpdateHelper.updateAllWidgets(getApplication())
+                val updatedLessons = repository.getCollegeSchedule().first()
+                ClassNotificationScheduler.scheduleAllUpcomingClassAlerts(getApplication(), updatedLessons)
             } else {
                 _statusMessage.value = "Ошибка: ${result.exceptionOrNull()?.message ?: "Сбой соединения"}"
             }

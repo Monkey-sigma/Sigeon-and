@@ -28,6 +28,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.EditNote
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -75,43 +76,43 @@ fun NotesScreen(
     viewModel: MainViewModel,
     modifier: Modifier = Modifier
 ) {
-    val allNotes by viewModel.allNotes.collectAsState()
+    val allNotes by viewModel.allNotes.collectAsState(initial = emptyList())
+
     var searchQuery by remember { mutableStateOf("") }
     var selectedTagFilter by remember { mutableStateOf("Все") }
-
-    val tags = listOf("Все", "Учеба", "Д/З", "Экзамен", "Личное", "Важное")
-
     var showAddDialog by remember { mutableStateOf(false) }
     var editingNote by remember { mutableStateOf<NoteEntity?>(null) }
     var fullscreenImageUri by remember { mutableStateOf<String?>(null) }
 
-    // Filter notes
+    val tags = listOf("Все", "Учеба", "Пара", "Д/З", "Экзамен", "Личное", "Важное")
+
     val filteredNotes = remember(allNotes, searchQuery, selectedTagFilter) {
         allNotes.filter { note ->
             val matchesQuery = searchQuery.isBlank() ||
-                note.title.contains(searchQuery, ignoreCase = true) ||
-                note.content.contains(searchQuery, ignoreCase = true) ||
-                note.checklistJson.contains(searchQuery, ignoreCase = true)
-            val matchesTag = selectedTagFilter == "Все" || note.tag == selectedTagFilter
+                    note.title.contains(searchQuery, ignoreCase = true) ||
+                    note.content.contains(searchQuery, ignoreCase = true) ||
+                    note.collegeSubject.contains(searchQuery, ignoreCase = true)
+            val matchesTag = when (selectedTagFilter) {
+                "Все" -> true
+                "Пара" -> note.collegePairNumber > 0 || note.collegeSubject.isNotBlank()
+                else -> note.tag == selectedTagFilter
+            }
             matchesQuery && matchesTag
         }
     }
 
-    val pinnedNotes = filteredNotes.filter { it.isPinned }
-    val regularNotes = filteredNotes.filter { !it.isPinned }
+    val pinnedNotes = remember(filteredNotes) { filteredNotes.filter { it.isPinned } }
+    val regularNotes = remember(filteredNotes) { filteredNotes.filter { !it.isPinned } }
 
     Scaffold(
         modifier = modifier.fillMaxSize(),
         topBar = {
             TopAppBar(
                 title = {
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
                         Surface(
                             shape = CircleShape,
-                            color = Color(0xFF10B981),
+                            color = SigeonPrimary,
                             modifier = Modifier.size(34.dp)
                         ) {
                             Box(contentAlignment = Alignment.Center) {
@@ -162,7 +163,7 @@ fun NotesScreen(
                 OutlinedTextField(
                     value = searchQuery,
                     onValueChange = { searchQuery = it },
-                    placeholder = { Text("Поиск заметок...", maxLines = 1, softWrap = false) },
+                    placeholder = { Text("Поиск заметок или предметов...", maxLines = 1, softWrap = false) },
                     leadingIcon = {
                         Icon(Icons.Default.Search, contentDescription = null, tint = MaterialTheme.colorScheme.onSurfaceVariant)
                     },
@@ -198,10 +199,9 @@ fun NotesScreen(
                             onClick = { selectedTagFilter = tag },
                             label = { Text(tag, maxLines = 1, softWrap = false) },
                             colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = SigeonPrimary.copy(alpha = 0.15f),
+                                selectedContainerColor = SigeonPrimary.copy(alpha = 0.2f),
                                 selectedLabelColor = SigeonPrimary
-                            ),
-                            modifier = Modifier.testTag("note_filter_$tag")
+                            )
                         )
                     }
                 }
@@ -213,7 +213,7 @@ fun NotesScreen(
                     Surface(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(vertical = 24.dp),
+                            .padding(vertical = 32.dp),
                         shape = RoundedCornerShape(16.dp),
                         color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                     ) {
@@ -225,19 +225,19 @@ fun NotesScreen(
                                 imageVector = Icons.Default.EditNote,
                                 contentDescription = null,
                                 tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                                modifier = Modifier.size(44.dp)
+                                modifier = Modifier.size(48.dp)
                             )
-                            Spacer(modifier = Modifier.height(10.dp))
+                            Spacer(modifier = Modifier.height(12.dp))
                             Text(
-                                text = "Заметок не найдено",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.SemiBold,
+                                text = "Заметок пока нет",
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
                                 maxLines = 1,
                                 softWrap = false
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                text = "Нажмите + чтобы создать заметку или фото-задание",
+                                text = "Нажмите +, чтобы добавить заметку к паре или задаче",
                                 fontSize = 12.sp,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                                 maxLines = 1,
@@ -351,8 +351,20 @@ fun NotesScreen(
     if (showAddDialog) {
         AddEditNoteDialog(
             onDismiss = { showAddDialog = false },
-            onConfirm = { title, content, date, tag, color, isPinned, items, imageUri ->
-                viewModel.addNote(title, content, date, tag, color, isPinned, items, imageUri)
+            onConfirm = { title, content, date, tag, color, isPinned, items, imageUri, slotId, pairNum, subj ->
+                viewModel.addNote(
+                    title = title,
+                    content = content,
+                    date = date,
+                    tag = tag,
+                    colorHex = color,
+                    isPinned = isPinned,
+                    checklistItems = items,
+                    imageUri = imageUri,
+                    classSlotId = slotId,
+                    collegePairNumber = pairNum,
+                    collegeSubject = subj
+                )
                 showAddDialog = false
             }
         )
@@ -363,7 +375,7 @@ fun NotesScreen(
         AddEditNoteDialog(
             existingNote = editingNote,
             onDismiss = { editingNote = null },
-            onConfirm = { title, content, date, tag, color, isPinned, items, imageUri ->
+            onConfirm = { title, content, date, tag, color, isPinned, items, imageUri, slotId, pairNum, subj ->
                 viewModel.updateNote(
                     editingNote!!.copy(
                         title = title,
@@ -373,7 +385,10 @@ fun NotesScreen(
                         colorHex = color,
                         isPinned = isPinned,
                         checklistJson = NoteEntity.serializeChecklist(items),
-                        imageUri = imageUri
+                        imageUri = imageUri,
+                        classSlotId = slotId,
+                        collegePairNumber = pairNum,
+                        collegeSubject = subj
                     )
                 )
                 editingNote = null
@@ -411,20 +426,54 @@ fun NoteCardItem(
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                // Category Tag
-                Surface(
-                    shape = RoundedCornerShape(6.dp),
-                    color = Color(android.graphics.Color.parseColor(note.colorHex)).copy(alpha = 0.15f)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = note.tag,
-                        fontSize = 11.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(android.graphics.Color.parseColor(note.colorHex)),
-                        maxLines = 1,
-                        softWrap = false,
-                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
-                    )
+                    // Category Tag
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = Color(android.graphics.Color.parseColor(note.colorHex)).copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = note.tag,
+                            fontSize = 11.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = Color(android.graphics.Color.parseColor(note.colorHex)),
+                            maxLines = 1,
+                            softWrap = false,
+                            modifier = Modifier.padding(horizontal = 7.dp, vertical = 2.dp)
+                        )
+                    }
+
+                    // Class Slot Association Pill
+                    if (note.collegePairNumber > 0 || note.collegeSubject.isNotBlank()) {
+                        Surface(
+                            shape = RoundedCornerShape(6.dp),
+                            color = SigeonPrimary.copy(alpha = 0.15f)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.School,
+                                    contentDescription = null,
+                                    tint = SigeonPrimary,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    text = if (note.collegePairNumber > 0) "Пара №${note.collegePairNumber}" else note.collegeSubject,
+                                    fontSize = 10.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = SigeonPrimary,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                            }
+                        }
+                    }
                 }
 
                 Row(verticalAlignment = Alignment.CenterVertically) {

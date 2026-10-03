@@ -35,6 +35,7 @@ import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.FileUpload
 import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Refresh
@@ -61,6 +62,8 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
@@ -112,6 +115,7 @@ fun SyncSettingsScreen(
     val allEvents by viewModel.allEvents.collectAsState()
     val allNotes by viewModel.allNotes.collectAsState()
     val exportedJson by viewModel.backupJsonExported.collectAsState()
+    val isClassNotificationsEnabled by viewModel.isClassNotificationsEnabled.collectAsState()
 
     var showCollegeConfigDialog by remember { mutableStateOf(false) }
     var showGroupSelectorSheet by remember { mutableStateOf(false) }
@@ -239,6 +243,99 @@ fun SyncSettingsScreen(
                                 overflow = TextOverflow.Ellipsis,
                                 softWrap = false
                             )
+                        }
+                    }
+                }
+            }
+
+            // Local 15-Minute Advance Class Notification Card
+            item {
+                Card(
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                    modifier = Modifier.fillMaxWidth().testTag("class_notification_card")
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp)
+                        ) {
+                            Surface(
+                                shape = CircleShape,
+                                color = Color(0xFFEF4444).copy(alpha = 0.15f),
+                                modifier = Modifier.size(40.dp)
+                            ) {
+                                Box(contentAlignment = Alignment.Center) {
+                                    Icon(
+                                        imageVector = Icons.Default.NotificationsActive,
+                                        contentDescription = null,
+                                        tint = Color(0xFFEF4444)
+                                    )
+                                }
+                            }
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Напоминания за 15 мин до пары",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
+                                )
+                                Text(
+                                    text = "Локальные уведомления о начале занятий",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = Color(0xFFEF4444),
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    softWrap = false
+                                )
+                            }
+
+                            Switch(
+                                checked = isClassNotificationsEnabled,
+                                onCheckedChange = { viewModel.toggleClassNotifications(it) },
+                                colors = SwitchDefaults.colors(checkedThumbColor = Color(0xFFEF4444))
+                            )
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(10.dp)) {
+                                Text(
+                                    text = "Статус: ${if (isClassNotificationsEnabled) "Активны (AlarmManager)" else "Отключены"}",
+                                    fontWeight = FontWeight.SemiBold,
+                                    fontSize = 12.sp,
+                                    color = if (isClassNotificationsEnabled) Color(0xFF10B981) else MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    softWrap = false
+                                )
+                                Spacer(modifier = Modifier.height(2.dp))
+                                Text(
+                                    text = "Уведомление будет срабатывать за 15 минут до каждой пары из загруженного расписания API.",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        OutlinedButton(
+                            onClick = { viewModel.sendTestClassNotification() },
+                            shape = RoundedCornerShape(10.dp),
+                            modifier = Modifier.fillMaxWidth().testTag("test_notification_button")
+                        ) {
+                            Icon(Icons.Default.NotificationsActive, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Text("Проверить работающее уведомление", fontSize = 12.sp, maxLines = 1, softWrap = false)
                         }
                     }
                 }

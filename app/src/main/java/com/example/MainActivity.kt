@@ -1,10 +1,14 @@
 package com.example
 
+import android.Manifest
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
@@ -79,6 +83,16 @@ fun SigeonApp(viewModel: MainViewModel = viewModel()) {
     val statusMessage by viewModel.statusMessage.collectAsState()
     val collegeClasses by viewModel.collegeSchedule.collectAsState()
     val allNotes by viewModel.allNotes.collectAsState()
+
+    // Request POST_NOTIFICATIONS permission on Android 13+
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+        val notifPermissionLauncher = rememberLauncherForActivityResult(
+            ActivityResultContracts.RequestPermission()
+        ) { }
+        LaunchedEffect(Unit) {
+            notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
 
     // Handle system back navigation to return to College schedule tab
     BackHandler(enabled = currentDestination != NavDestination.COLLEGE) {

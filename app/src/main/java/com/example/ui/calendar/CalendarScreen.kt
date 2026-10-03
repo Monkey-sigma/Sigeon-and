@@ -555,8 +555,8 @@ fun CalendarScreen(
         AddEditNoteDialog(
             initialDate = selectedDate,
             onDismiss = { showAddNoteDialog = false },
-            onConfirm = { title, content, date, tag, color, isPinned, items, imageUri ->
-                viewModel.addNote(title, content, date, tag, color, isPinned, items, imageUri)
+            onConfirm = { title, content, date, tag, color, isPinned, items, imageUri, slotId, pairNum, subj ->
+                viewModel.addNote(title, content, date, tag, color, isPinned, items, imageUri, slotId, pairNum, subj)
                 showAddNoteDialog = false
             }
         )

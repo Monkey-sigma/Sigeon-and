@@ -31,8 +31,12 @@ import androidx.compose.material.icons.filled.AddPhotoAlternate
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.DeleteOutline
+import androidx.compose.material.icons.filled.FormatBold
+import androidx.compose.material.icons.filled.FormatItalic
+import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.School
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -79,6 +83,9 @@ import kotlinx.coroutines.launch
 @Composable
 fun AddEditNoteDialog(
     initialDate: String? = null,
+    initialClassSlotId: Long? = null,
+    initialPairNumber: Int = 0,
+    initialSubject: String = "",
     existingNote: NoteEntity? = null,
     onDismiss: () -> Unit,
     onConfirm: (
@@ -89,21 +96,31 @@ fun AddEditNoteDialog(
         colorHex: String,
         isPinned: Boolean,
         checklistItems: List<ChecklistItem>,
-        imageUri: String?
+        imageUri: String?,
+        classSlotId: Long?,
+        collegePairNumber: Int,
+        collegeSubject: String
     ) -> Unit
 ) {
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
 
-    var title by remember { mutableStateOf(existingNote?.title ?: "") }
+    val defaultTitle = existingNote?.title
+        ?: if (initialSubject.isNotBlank()) "Заметка к паре: $initialSubject" else ""
+
+    var title by remember { mutableStateOf(defaultTitle) }
     var content by remember { mutableStateOf(existingNote?.content ?: "") }
     var attachToDate by remember { mutableStateOf(existingNote?.date != null || initialDate != null) }
     var date by remember { mutableStateOf(existingNote?.date ?: initialDate ?: "") }
     var isPinned by remember { mutableStateOf(existingNote?.isPinned ?: false) }
     var attachedImageUri by remember { mutableStateOf(existingNote?.imageUri) }
 
+    val classSlotId = existingNote?.classSlotId ?: initialClassSlotId
+    val pairNumber = if (existingNote?.collegePairNumber ?: 0 > 0) existingNote?.collegePairNumber ?: 0 else initialPairNumber
+    val subjectName = existingNote?.collegeSubject?.ifBlank { initialSubject } ?: initialSubject
+
     val tags = listOf("Учеба", "Д/З", "Экзамен", "Личное", "Важное")
-    var selectedTag by remember { mutableStateOf(existingNote?.tag ?: "Учеба") }
+    var selectedTag by remember { mutableStateOf(existingNote?.tag ?: if (pairNumber > 0 || subjectName.isNotBlank()) "Учеба" else "Учеба") }
 
     val colors = listOf(
         "#6366F1", // Indigo
@@ -171,6 +188,37 @@ fun AddEditNoteDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
+                // Associated Class Slot Banner
+                if (pairNumber > 0 || subjectName.isNotBlank()) {
+                    Surface(
+                        shape = RoundedCornerShape(10.dp),
+                        color = SigeonPrimary.copy(alpha = 0.12f),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.School,
+                                contentDescription = null,
+                                tint = SigeonPrimary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "Привязано к паре: №$pairNumber $subjectName",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = SigeonPrimary,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                softWrap = false
+                            )
+                        }
+                    }
+                }
+
                 OutlinedTextField(
                     value = title,
                     onValueChange = {
@@ -185,14 +233,66 @@ fun AddEditNoteDialog(
                     singleLine = true
                 )
 
+                // Text Formatting Toolbar
+                Surface(
+                    shape = RoundedCornerShape(10.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 6.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                            IconButton(
+                                onClick = { content += " **Полужирный** " },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(Icons.Default.FormatBold, contentDescription = "Полужирный", modifier = Modifier.size(18.dp))
+                            }
+                            IconButton(
+                                onClick = { content += " *Курсив* " },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(Icons.Default.FormatItalic, contentDescription = "Курсив", modifier = Modifier.size(18.dp))
+                            }
+                            IconButton(
+                                onClick = { content += "\n• " },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(Icons.AutoMirrored.Filled.FormatListBulleted, contentDescription = "Список", modifier = Modifier.size(18.dp))
+                            }
+                            IconButton(
+                                onClick = { content += "\n> " },
+                                modifier = Modifier.size(32.dp)
+                            ) {
+                                Icon(Icons.Default.FormatQuote, contentDescription = "Цитата", modifier = Modifier.size(18.dp))
+                            }
+                        }
+
+                        // Word counter
+                        val charCount = content.length
+                        Text(
+                            text = "$charCount симв.",
+                            fontSize = 10.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(end = 6.dp),
+                            maxLines = 1
+                        )
+                    }
+                }
+
                 OutlinedTextField(
                     value = content,
                     onValueChange = { content = it },
-                    label = { Text("Описание / текст...", maxLines = 1) },
+                    label = { Text("Текст заметки к паре / Конспект...", maxLines = 1) },
                     modifier = Modifier.fillMaxWidth().testTag("note_content_input"),
                     shape = RoundedCornerShape(12.dp),
-                    minLines = 3,
-                    maxLines = 6
+                    minLines = 4,
+                    maxLines = 8
                 )
 
                 // Attached image section
@@ -255,7 +355,7 @@ fun AddEditNoteDialog(
                         ) {
                             Icon(Icons.Default.AddPhotoAlternate, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Прикрепить картинку / фото", maxLines = 1)
+                            Text("Прикрепить фото / скан доски", maxLines = 1)
                         }
                     }
                 }
@@ -272,7 +372,7 @@ fun AddEditNoteDialog(
                         modifier = Modifier.size(18.dp)
                     )
                     Text(
-                        text = "Чек-лист / Задачи (${checklistItems.size}):",
+                        text = "Чек-лист / Задачи к паре (${checklistItems.size}):",
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
                         maxLines = 1
@@ -324,7 +424,7 @@ fun AddEditNoteDialog(
                     OutlinedTextField(
                         value = newChecklistText,
                         onValueChange = { newChecklistText = it },
-                        placeholder = { Text("Новый пункт задания...", maxLines = 1) },
+                        placeholder = { Text("Новый пункт (напр. Д/З к следующей паре)...", maxLines = 1) },
                         modifier = Modifier.weight(1f),
                         shape = RoundedCornerShape(10.dp),
                         singleLine = true
@@ -457,7 +557,10 @@ fun AddEditNoteDialog(
                         selectedColor,
                         isPinned,
                         checklistItems.toList(),
-                        attachedImageUri
+                        attachedImageUri,
+                        classSlotId,
+                        pairNumber,
+                        subjectName
                     )
                 },
                 colors = ButtonDefaults.buttonColors(containerColor = SigeonPrimary),
